@@ -4,7 +4,7 @@
 
 ## 📷 Screenshot
 
-![VoxShare Screenshot](screenshot.png)
+![VoxShare Screenshot](Screenshot.jpg)
 
 ## 🎧 Features
 
