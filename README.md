@@ -30,6 +30,7 @@ pip install -r requirements.txt
 ```
 
 For executable file no need to install any packages (python on so one).
+In both cases logo.png file should be at the same location as voxshare_gui_XXX.py or voxshare_gui_XXX.exe file. 
 
 ## 🔧 How it works
 
@@ -56,7 +57,6 @@ python voxshare_gui_XXX.py
 voxshare_gui_XXX.exe
 ```
 
-In both cases logo.png file should be at the same location as voxshare_gui_XXX.py file. 
 1. Select your microphone and speaker.
 2. Press and hold the circular button to talk.
 3. Speak into your microphone and release when done.
