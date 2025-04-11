@@ -42,12 +42,19 @@ pip install -r requirements.txt
 
 ![VoxShare Screenshot](Screenshot.jpg)
 
-## ▶️ Usage
+## ▶️ Usage (python)
 
 ```bash
 python voxshare_gui_XXX.py
 ```
 
+## ▶️ Usage (executable in windows)
+
+```bash
+voxshare_gui_XXX.exe
+```
+
+In both cases logo.png file shoud be at the same location as voxshare_gui_XXX.py file.
 1. Select your microphone and speaker.
 2. Press and hold the circular button to talk.
 3. Speak into your microphone and release when done.
