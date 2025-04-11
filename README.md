@@ -23,3 +23,7 @@ Install all dependencies with:
 
 ```bash
 pip install -r requirements.txt
+
+## 📷 Screenshot
+
+![VoxShare Screenshot](screenshot.png)
