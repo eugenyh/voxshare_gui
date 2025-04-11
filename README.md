@@ -42,9 +42,7 @@ pip install -r requirements.txt
 
 ## 📷 Screenshot
 
-![VoxShare Screenshot](screenshot.jpg)
-
-![How VoxShare Works](A_diagram_illustrates_the_operation_of_VoxShare,_a.png)
+![VoxShare Screenshot](Screenshot.jpg)
 
 ## ▶️ Usage
 
