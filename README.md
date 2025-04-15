@@ -7,7 +7,7 @@
 
 ## 📦 Releases
 
-Check out the [CHANGELOG.md](CHANGELOG.md) for a detailed list of features, bug fixes, and improvements by version.
+Check out the [changelog.md](changelog.md) for a detailed list of features, bug fixes, and improvements by version.
 
 Latest version: **v0.7**  
 Release date: **2025-04-15**
