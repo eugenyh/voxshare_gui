@@ -1,0 +1,29 @@
+{
+  "gui": {
+    "appearance_mode": "dark",
+    "selector_geometry": "500x350",
+    "main_geometry": "550x450"
+  },
+  "network": {
+    "multicast_group": "239.255.42.99",
+    "port": 5005,
+    "ttl": 1,
+    "socket_buffer_size": 65536,
+    "ping_interval_sec": 2,
+    "client_timeout_sec": 5
+  },
+  "audio": {
+    "sample_rate": 48000,
+    "channels": 1,
+    "block_size": 960,
+    "dtype": "int16",
+    "opus_application": "voip",
+    "playback_queue_size": 20
+  },
+  "logging": {
+    "enabled": true,
+    "log_file": "voxshare.log",
+    "log_level": "INFO",
+    "log_format": "%(asctime)s - %(levelname)s - %(threadName)s - %(message)s"
+  }
+}
