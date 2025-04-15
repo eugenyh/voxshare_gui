@@ -1,12 +1,16 @@
 # VoxShare
 
-![VoxShare Logo](logo.png)
 
 **VoxShare** is a simple Python-based push-to-talk multicast voice chat application with a sleek modern GUI built using CustomTkinter.
 
-[![Run on Replit](https://replit.com/badge/github/your-username/voxshare)](https://replit.com/new/github/your-username/voxshare)
-
 ---
+
+## 📦 Releases
+
+Check out the [CHANGELOG.md](CHANGELOG.md) for a detailed list of features, bug fixes, and improvements by version.
+
+Latest version: **v0.7**  
+Release date: **2025-04-15**
 
 ## 🎧 Features
 
@@ -42,9 +46,7 @@ pip install -r requirements.txt
 
 ## 📷 Screenshot
 
-![VoxShare Screenshot](screenshot.png)
-
-![How VoxShare Works](A_diagram_illustrates_the_operation_of_VoxShare,_a.png)
+![VoxShare Screenshot](Screenshot.jpg)
 
 ## ▶️ Usage
 
