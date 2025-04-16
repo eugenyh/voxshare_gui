@@ -27,21 +27,22 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Get version from tag
-        id: get_version
+      - name: Prepare variables
         run: |
-          version=${GITHUB_REF##*/}
-          echo "VERSION=${version}" >> $GITHUB_ENV
+          VERSION=${GITHUB_REF##*/}
+          SCRIPT_NAME="voxshare-gui_${VERSION//./p}.py"
+          EXE_NAME="voxshare_${VERSION}.exe"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "SCRIPT_NAME=$SCRIPT_NAME" >> $GITHUB_ENV
+          echo "EXE_NAME=$EXE_NAME" >> $GITHUB_ENV
 
       - name: Build EXE
         run: |
-          script_name="voxshare-gui_${{ env.VERSION//./p }}.py"
-          pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "logo.png;images" "$script_name"
-          mv dist/voxshare-gui_${{ env.VERSION//./p }}.exe dist/voxshare_${{ env.VERSION }}.exe
+          pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "Icons/logo.png;images" "$SCRIPT_NAME"
+          mv "dist/voxshare-gui_${{ env.VERSION//./p }}.exe" "dist/${{ env.EXE_NAME }}"
 
       - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: |
-            dist/voxshare_${{ env.VERSION }}.exe
+          files: dist/${{ env.EXE_NAME }}
