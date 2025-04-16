@@ -14,11 +14,6 @@ All notable changes to this project will be documented in this file.
 ### Added
 - Added embedded resource system using PyInstaller:
   - Logo.png now included in EXE via `--add-data`
-  - New resource loading method `load_embedded_asset()`
-- Added config version migration path (v1 to v2)
-- New peer status indicators in GUI:
-  - Connection quality bars
-  - Voice activity markers
 
 ### Changed
 - Rewrote config handler to use atomic writes:
@@ -29,7 +24,6 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 - Removed external logo.png dependency
-- Removed legacy config.ini support completely
 
 ---
 
