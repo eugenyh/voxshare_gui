@@ -1,0 +1,5 @@
+customtkinter
+sounddevice
+numpy
+Pillow
+opuslib

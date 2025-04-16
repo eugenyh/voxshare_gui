@@ -1,4 +1,4 @@
-name: Build and Release
+name: Build and Release VoxShare
 
 on:
   push:
@@ -14,35 +14,34 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install pyinstaller
-
-      - name: Extract version and build EXE
-        shell: bash
         run: |
-          version="${GITHUB_REF_NAME}"               # v0.8
-          version_number="${version#v}"              # 0.8
-          version_tag="${version_number/./p}"        # 0p8
-          script_name="voxshare-gui_v${version_tag}.py"
-          exe_name="voxshare_v${version_number}.exe"
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
 
-          echo "SCRIPT_NAME=$script_name" >> $GITHUB_ENV
-          echo "EXE_NAME=$exe_name" >> $GITHUB_ENV
+      - name: Get version from tag
+        id: get_version
+        run: |
+          $version = "${{ github.ref_name }}"
+          echo "VERSION=$version" >> $env:GITHUB_ENV
 
-          pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "Icons/logo.png;images" "$script_name"
-          mv "dist/${script_name%.py}.exe" "dist/$exe_name"
+      - name: Build EXE
+        run: |
+          $script_name = "voxshare-gui_${{ env.VERSION -replace '\.', 'p' }}.py"
+          pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "logo.png;images" "$script_name"
+          Rename-Item -Path "dist/$(($script_name -replace '\.py$', '.exe'))" -NewName "voxshare_${{ env.VERSION }}.exe"
 
-      - name: Upload release asset
+      - name: Upload Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/${{ env.EXE_NAME }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/voxshare_${{ env.VERSION }}.exe
