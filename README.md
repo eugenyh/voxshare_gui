@@ -1,6 +1,5 @@
 # VoxShare
 
-
 **VoxShare** is a simple Python-based push-to-talk multicast voice chat application with a sleek modern GUI built using CustomTkinter.
 
 ---
@@ -28,7 +27,8 @@ Release date: **2025-04-15**
   - `sounddevice`
   - `numpy`
   - `Pillow`
-
+  - `opuslib`
+  
 Install all dependencies with:
 
 ```bash
@@ -38,7 +38,7 @@ pip install -r requirements.txt
 ## 🔧 How it works
 
 1. **Audio Input**: VoxShare captures audio from the selected microphone in real-time.
-2. **Push-to-Talk**: Audio is transmitted only while the push-to-talk button is held down.
+2. **Push-to-Talk**: Audio is transmitted only while the push-to-talk button (space) is held down.
 3. **Multicast UDP**: Audio packets are sent over a multicast UDP channel to all clients in the local network.
 4. **Volume Meter**: A volume meter displays your current speaking volume.
 5. **Audio Output**: Received audio packets are played through the selected output device.
