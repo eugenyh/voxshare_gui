@@ -1,0 +1,45 @@
+name: Build EXE and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+
+      - name: Extract version and build EXE
+        run: |
+          version=${{ github.ref_name }}               # v0.8
+          version_number=${version#v}                  # 0.8
+          version_tag=${version_number/./p}            # 0p8
+          script_name=voxshare-gui_v${version_tag}.py  # voxshare-gui_v0p8.py
+          exe_name=voxshare_v${version_number}.exe     # voxshare_v0.8.exe
+
+          echo "SCRIPT_NAME=$script_name" >> $GITHUB_ENV
+          echo "EXE_NAME=$exe_name" >> $GITHUB_ENV
+
+          pyinstaller --onefile "$script_name"
+          mv "dist/${script_name%.py}.exe" "dist/$exe_name"
+
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ env.EXE_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
