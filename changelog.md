@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [0.8) – 2025-04-16
+
+### Fixed
+- Fixed some minor bugs
+
+### Added
+- Now Logo.png inside EXE file. No need to download it.
+
+---
+
 ## [0.7) – 2025-04-15
 
 ### Fixed
