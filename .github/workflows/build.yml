@@ -24,7 +24,7 @@ jobs:
           pip install pyinstaller
 
       - name: Extract version and build EXE
-        run: |
+        run: |                                         
           version=${{ github.ref_name }}               # v0.8
           version_number=${version#v}                  # 0.8
           version_tag=${version_number/./p}            # 0p8
@@ -34,7 +34,7 @@ jobs:
           echo "SCRIPT_NAME=$script_name" >> $GITHUB_ENV
           echo "EXE_NAME=$exe_name" >> $GITHUB_ENV
 
-          pyinstaller --onefile "$script_name"
+          pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "logo.png;images" "$script_name"
           mv "dist/${script_name%.py}.exe" "dist/$exe_name"
 
       - name: Upload Release Asset
