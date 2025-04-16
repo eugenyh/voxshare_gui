@@ -14,9 +14,11 @@ Release date: **2025-04-16**
 ## 🎧 Features
 
 - Voice transmission via UDP multicast
+- Using the OPUS codec to optimize network bandwidth
 - Push-to-talk button with visual feedback
 - Volume level visualization
 - Custom audio input/output device selection
+- Peers list (including peer activity)
 - Lightweight and easy to use
 
 ## 🚀 Requirements
