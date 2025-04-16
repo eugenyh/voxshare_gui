@@ -1,4 +1,4 @@
-name: Build and Release VoxShare
+name: Build and Release
 
 on:
   push:
@@ -14,12 +14,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.x'
 
       - name: Install dependencies
         run: |
@@ -27,22 +27,21 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Prepare variables
+      - name: Extract version and build EXE
+        shell: bash
         run: |
-          VERSION=${GITHUB_REF##*/}
-          SCRIPT_NAME="voxshare-gui_${VERSION//./p}.py"
-          EXE_NAME="voxshare_${VERSION}.exe"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "SCRIPT_NAME=$SCRIPT_NAME" >> $GITHUB_ENV
-          echo "EXE_NAME=$EXE_NAME" >> $GITHUB_ENV
-
-      - name: Build EXE
-        run: |
-          pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "Icons/logo.png;images" "$SCRIPT_NAME"
-          mv "dist/voxshare-gui_${{ env.VERSION//./p }}.exe" "dist/${{ env.EXE_NAME }}"
-
-      - name: Upload Release
+          version="${GITHUB_REF_NAME}"               # v0.8
+          version_number="${version#v}"              # 0.8
+          version_tag="${version_number/./p}"        # 0p8
+          script_name="voxshare-gui_v${version_tag}.py"
+          exe_name="voxshare-gui_v${version_number}.exe"
+          echo "SCRIPT_NAME=$script_name" >> $GITHUB_ENV
+          echo "EXE_NAME=$exe_name" >> $GITHUB_ENV
+          pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "Icons/logo.png;images" "$script_name"
+          mv "dist/${script_name%.py}.exe" "dist/$exe_name"
+      - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
           files: dist/${{ env.EXE_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
