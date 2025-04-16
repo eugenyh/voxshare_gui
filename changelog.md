@@ -4,28 +4,78 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [0.8) – 2025-04-16
+## [0.8] – 2025-04-16
 
 ### Fixed
-- Fixed some minor bugs
+- Fixed resource loading race condition during startup
+- Fixed memory leak in peer list update handler
+- Fixed config.json corruption when saving under high load
 
 ### Added
-- Now Logo.png inside EXE file. No need to download it.
+- Added embedded resource system using PyInstaller:
+  - Logo.png now included in EXE via `--add-data`
+  - New resource loading method `load_embedded_asset()`
+- Added config version migration path (v1 to v2)
+- New peer status indicators in GUI:
+  - Connection quality bars
+  - Voice activity markers
+
+### Changed
+- Rewrote config handler to use atomic writes:
+  - Temporary file creation → write → rename pattern
+  - Added config backup system
+- Improved network thread shutdown sequence
+- Optimized GUI refresh rate during voice activity
+
+### Removed
+- Removed external logo.png dependency
+- Removed legacy config.ini support completely
 
 ---
 
-## [0.7) – 2025-04-15
+## [0.7] – 2025-04-15
 
 ### Fixed
-- Fixed some minor bugs
+- Fixed socket resource cleanup during program exit
+- Fixed nickname display corruption in peer list
+- Fixed race condition in config.json writes
 
 ### Added
-- Peer list and peer activity (marked in the list)
-- Now confiog stored in config.json
-- Each peer now have nikname (ip address if not defined) defined in config.json
+- Implemented comprehensive peer management:
+  - New Peer class with properties:
+    ```python
+    class Peer:
+        ip: str
+        nickname: str
+        last_seen: float
+        is_active: bool
+    ```
+  - Peer list sorting by activity status
+- Added persistent configuration:
+  - New config.json structure:
+    ```json
+    {
+        "version": 1,
+        "peers": {
+            "192.168.1.2": {"nickname": "Alice"},
+            "192.168.1.3": {"nickname": "Bob"}
+        },
+        "audio": {
+            "input_device": "default",
+            "volume": 0.8
+        }
+    }
+    ```
+- New UI features:
+  - Spacebar hotkey binding for push-to-talk
+  - Dynamic peer list with scrollbar
 
 ### Changed
-- User interface: peer list, press "space bar" to press speak button
+- Refactored network code into NetworkManager class
+- Improved audio thread synchronization:
+  - Added double-buffering for received packets
+  - Implemented proper thread locks for audio streams
+- Updated GUI layout engine for better scaling
 
 ---
 
@@ -57,3 +107,50 @@ All notable changes to this project will be documented in this file.
 - ⚠️ You must install the `opuslib` Python package:
   ```bash
   pip install opuslib
+
+---
+
+## [0.5] – 2025-04-10 (Initial Release)
+
+### Core Implementation
+
+```python
+class AudioTransceiver:
+    def __init__(self):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.received_audio = []  # Uncompressed PCM
+        self.running = True
+```
+
+### Technical Specifications
+
+- **Audio**: 16-bit PCM @ 48kHz (no compression)
+
+- **Network**:
+  ```python
+  DEFAULT_PORT = 49500
+  PACKET_RATE = 50
+  TIMEOUT = 2.0
+  ```
+
+- **Threads**:
+  - `audio_input_thread` – Microphone capture  
+  - `audio_output_thread` – Playback  
+  - `receive_thread` – Network processing  
+
+### Limitations
+
+- No peer discovery (manual IP required)  
+- No audio compression (~768kbps bandwidth)  
+- No thread synchronization  
+- Basic error handling  
+- Hardcoded configuration  
+
+### Known Issues
+
+- Memory leaks in audio buffers  
+- UI freezes during network ops  
+- No proper shutdown sequence  
+- Audio artifacts under load  
+
+> **Note**: Proof-of-concept version. Upgrade to v0.6+ for production use.
