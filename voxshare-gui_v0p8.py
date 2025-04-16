@@ -25,6 +25,12 @@ PACKET_TYPE_PING = b"PING" # Префикс остается 4 байта
 # --- Дополнительные константы ---
 SPEAKER_TIMEOUT_THRESHOLD = 0.3 # Секунды, через которые статус "говорит" сбрасывается
 
+def resource_path(relative_path):
+    """ Получает корректный путь для ресурсов в EXE и в разработке """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 # --- Функции для работы с настройками и логированием ---
 
 def get_default_config():
@@ -490,7 +496,8 @@ class VoxShareGUI(ctk.CTk):
         ctk.CTkLabel(top_frame, text="VoxShare", font=("Arial", 24)).pack()
         middle_frame = ctk.CTkFrame(self, fg_color="transparent"); middle_frame.pack(pady=10, padx=10, fill="both", expand=True)
         try:
-            img = Image.open("logo.png").resize((150, 150), Image.Resampling.LANCZOS)
+            logo_path = resource_path(os.path.join("images", "logo.png"))
+            img = Image.open(logo_path).resize((150, 150), Image.Resampling.LANCZOS)
             self.logo_img = ctk.CTkImage(light_image=img, dark_image=img, size=(150, 150))
             logo_widget = ctk.CTkLabel(middle_frame, image=self.logo_img, text=""); logging.debug("Логотип logo.png загружен.")
         except FileNotFoundError: logging.warning("Файл logo.png не найден."); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Лого]", width=150, height=150, fg_color="grey")
