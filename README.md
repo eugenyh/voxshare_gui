@@ -50,8 +50,16 @@ pip install -r requirements.txt
 
 ## ▶️ Usage
 
+As python appication
+
 ```bash
 python voxshare_gui_XXX.py
+```
+
+As windows application
+
+```bash
+voxshare_gui_XXX.exe
 ```
 
 1. Select your microphone and speaker.
