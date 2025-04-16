@@ -30,14 +30,14 @@ jobs:
       - name: Get version from tag
         id: get_version
         run: |
-          $version = "${{ github.ref_name }}"
-          echo "VERSION=$version" >> $env:GITHUB_ENV
+          version=${GITHUB_REF##*/}
+          echo "VERSION=${version}" >> $GITHUB_ENV
 
       - name: Build EXE
         run: |
-          $script_name = "voxshare-gui_${{ env.VERSION -replace '\.', 'p' }}.py"
+          script_name="voxshare-gui_${{ env.VERSION//./p }}.py"
           pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "logo.png;images" "$script_name"
-          Rename-Item -Path "dist/$(($script_name -replace '\.py$', '.exe'))" -NewName "voxshare_${{ env.VERSION }}.exe"
+          mv dist/voxshare-gui_${{ env.VERSION//./p }}.exe dist/voxshare_${{ env.VERSION }}.exe
 
       - name: Upload Release
         uses: softprops/action-gh-release@v2
