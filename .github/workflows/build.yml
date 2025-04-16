@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # запуск при пуше тэга, например v0.8
+      - 'v*'
 
 jobs:
   build:
@@ -24,9 +24,9 @@ jobs:
       - name: Extract version and build EXE
         shell: bash
         run: |
-          version=${{ github.ref_name }}               # v0.8
-          version_number=${version#v}                  # 0.8
-          version_tag=${version_number/./p}            # 0p8
+          version="${GITHUB_REF_NAME}"               # v0.8
+          version_number="${version#v}"              # 0.8
+          version_tag="${version_number/./p}"        # 0p8
           script_name="voxshare-gui_v${version_tag}.py"
           exe_name="voxshare_v${version_number}.exe"
 
