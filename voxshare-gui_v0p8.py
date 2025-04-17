@@ -123,7 +123,7 @@ def setup_logging():
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
     try:
-        logging.basicConfig(level=log_level, format=log_format, filename=log_file, filemode='a', encoding='utf-8', force=True)
+        logging.basicConfig(level=log_level, format=log_format, filename=log_file, filemode='w', encoding='utf-8', force=True)
         logging.info("="*20 + " Application Start " + "="*20)
         logging.info(f"Logging configured. Level: {log_level_str}, Файл: {log_file}")
         print(f"Logging configured. Level: {log_level_str}, Файл: {log_file}")

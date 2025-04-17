@@ -37,3 +37,8 @@ customtkinter_settings.json
 
 $my config
 config.json
+
+#nuitka
+nuitka-crash-report.xml
+*.build
+*.dist
