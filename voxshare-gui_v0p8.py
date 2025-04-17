@@ -13,30 +13,31 @@ import opuslib
 import json
 import logging
 import sys
-import tkinter # Для проверки типа event
+import tkinter # For checking the type of event
+import os
 
-# --- Глобальный словарь для настроек ---
+# --- Global dictionary for settings ---
 config = {}
 
-# --- Глобальные определения констант типов пакетов ---
+# --- Global definitions of packet type constants ---
 PACKET_TYPE_AUDIO = b"AUD"
-PACKET_TYPE_PING = b"PING" # Префикс остается 4 байта
+PACKET_TYPE_PING = b"PING" # Prefix remains 4 bytes
 
-# --- Дополнительные константы ---
-SPEAKER_TIMEOUT_THRESHOLD = 0.3 # Секунды, через которые статус "говорит" сбрасывается
+# --- Additional constants ---
+SPEAKER_TIMEOUT_THRESHOLD = 0.3 # Seconds after which the "speaking" status is reset
 
 def resource_path(relative_path):
-    """ Получает корректный путь для ресурсов в EXE и в разработке """
+    """ Gets the correct path for resources in EXE and in development """
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
-# --- Функции для работы с настройками и логированием ---
+# --- Functions for working with settings and logging ---
 
 def get_default_config():
-    """Возвращает словарь с настройками по умолчанию."""
+    """Returns a dictionary with default settings."""
     return {
-        "user": { # <--- Добавлена секция пользователя
+        "user": { # <--- Added user section
             "nickname": ""
         },
         "gui": {
@@ -68,9 +69,9 @@ def get_default_config():
         }
     }
 
-# --- Функции load_config, setup_logging (без изменений) ---
+# --- load_config, setup_logging functions (no changes) ---
 def load_config(filename="config.json"):
-    """Загружает настройки из JSON файла или создает файл с настройками по умолчанию."""
+    """Loads settings from a JSON file or creates a file with default settings."""
     global config
     defaults = get_default_config()
     try:
@@ -87,32 +88,32 @@ def load_config(filename="config.json"):
                         d[k] = v
                 return d
             config = update_recursive(defaults, loaded_config)
-            print(f"Настройки загружены из {filename}")
+            print(f"Settings loaded from {filename}")
     except FileNotFoundError:
-        print(f"Файл настроек {filename} не найден. Создаю файл с настройками по умолчанию.")
+        print(f"Settings file {filename} not found. Creating a file with default settings.")
         config = defaults
         try:
             with open(filename, 'w', encoding='utf-8') as f:
                 json.dump(config, f, indent=2, ensure_ascii=False)
-            print(f"Файл настроек {filename} создан.")
+            print(f"Settings file {filename} created.")
         except IOError as e:
-            print(f"Ошибка: Не удалось создать файл настроек {filename}: {e}")
+            print(f"Error: Could not create settings file {filename}: {e}")
     except json.JSONDecodeError as e:
-        print(f"Ошибка: Не удалось декодировать JSON в файле {filename}: {e}")
-        print("Используются настройки по умолчанию.")
+        print(f"Error: Could not decode JSON in file {filename}: {e}")
+        print("Using default settings.")
         config = defaults
     except Exception as e:
-        print(f"Неожиданная ошибка при загрузке настроек: {e}")
-        print("Используются настройки по умолчанию.")
+        print(f"Unexpected error while loading settings: {e}")
+        print("Using default settings.")
         config = defaults
 
 def setup_logging():
-    """Настраивает систему логирования на основе конфигурации."""
+    """Configures the logging system based on the configuration."""
     log_config = config.get('logging', {})
     enabled = log_config.get('enabled', False)
     if not enabled:
         logging.disable(logging.CRITICAL)
-        print("Логирование отключено в настройках.")
+        print("Logging disabled in settings.")
         return
     log_level_str = log_config.get('log_level', 'INFO').upper()
     log_file = log_config.get('log_file', 'voxshare.log')
@@ -123,28 +124,28 @@ def setup_logging():
         logging.root.removeHandler(handler)
     try:
         logging.basicConfig(level=log_level, format=log_format, filename=log_file, filemode='a', encoding='utf-8', force=True)
-        logging.info("="*20 + " Запуск приложения " + "="*20)
-        logging.info(f"Логирование настроено. Уровень: {log_level_str}, Файл: {log_file}")
-        print(f"Логирование включено. Уровень: {log_level_str}, Файл: {log_file}")
+        logging.info("="*20 + " Application Start " + "="*20)
+        logging.info(f"Logging configured. Level: {log_level_str}, Файл: {log_file}")
+        print(f"Logging configured. Level: {log_level_str}, Файл: {log_file}")
     except IOError as e:
-         print(f"Ошибка настройки логирования в файл {log_file}: {e}. Логирование будет отключено.")
+         print(f"Error configuring logging to file {log_file}: {e}. Logging will be disabled.")
          logging.disable(logging.CRITICAL)
     except Exception as e:
-        print(f"Неожиданная ошибка настройки логирования: {e}. Логирование будет отключено.")
+        print(f"Unexpected error configuring logging: {e}. Logging will be disabled.")
         logging.disable(logging.CRITICAL)
 
-# --- Сопоставление строк из конфига с константами Opus ---
+# --- Mapping strings from config to Opus constants ---
 OPUS_APPLICATION_MAP = { "voip": opuslib.APPLICATION_VOIP, "audio": opuslib.APPLICATION_AUDIO, "restricted_lowdelay": opuslib.APPLICATION_RESTRICTED_LOWDELAY }
 
-# --- Класс для работы с сетью и Opus ---
+# --- Class for working with network and Opus ---
 class AudioTransceiver:
-    # *** ИЗМЕНЕНИЕ: Принимает user_config ***
+    # *** CHANGE: Accepts user_config ***
     def __init__(self, user_config, net_config, audio_config):
         self.user_config = user_config
         self.net_config = net_config
         self.audio_config = audio_config
 
-        # *** НОВОЕ: Сохраняем никнейм ***
+        # *** NEW: Saving nickname ***
         self.nickname = self.user_config.get('nickname', '').strip()
         # ---------------------------------
 
@@ -154,8 +155,8 @@ class AudioTransceiver:
              logging.warning("Не удалось определить локальный IP по hostname, используется '127.0.0.1'")
              self.local_ip = "127.0.0.1"
 
-        # *** ИЗМЕНЕНИЕ: Структура active_clients ***
-        # Теперь хранит {ip: {'nickname': str, 'last_seen': float}}
+        # *** CHANGE: Structure of active_clients ***
+        # Now stores {ip: {'nickname': str, 'last_seen': float}}
         self.active_clients = {}
         # ******************************************
         self.clients_lock = Lock()
@@ -176,18 +177,18 @@ class AudioTransceiver:
         try:
             self.encoder = opuslib.Encoder(self.sample_rate, self.channels, self.opus_application)
             self.decoder = opuslib.Decoder(self.sample_rate, self.channels)
-            logging.info(f"Opus инициализирован: Rate={self.sample_rate}, Channels={self.channels}, App={opus_app_str}")
+            logging.info(f"Opus initialized: Rate={self.sample_rate}, Channels={self.channels}, App={opus_app_str}")
         except opuslib.OpusError as e:
-            logging.exception("Критическая ошибка инициализации Opus")
-            raise RuntimeError(f"Ошибка инициализации Opus: {e}")
+            logging.exception("Critical Opus initialization error")
+            raise RuntimeError(f"Opus initialization error: {e}")
         except Exception as e:
-             logging.exception("Неожиданная критическая ошибка инициализации Opus")
-             raise RuntimeError(f"Неожиданная ошибка инициализации Opus: {e}")
+             logging.exception("Unexpected critical Opus initialization error")
+             raise RuntimeError(f"Unexpected Opus initialization error: {e}")
         self.init_sockets()
 
-    # --- init_sockets, cleanup, encode_and_send_audio (без изменений) ---
+    # --- init_sockets, cleanup, encode_and_send_audio (no changes) ---
     def init_sockets(self):
-        """Инициализация multicast сокетов"""
+        """Initialization of multicast sockets"""
         try:
             self.sock_send = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self.sock_send.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, self.ttl)
@@ -496,7 +497,7 @@ class VoxShareGUI(ctk.CTk):
         ctk.CTkLabel(top_frame, text="VoxShare", font=("Arial", 24)).pack()
         middle_frame = ctk.CTkFrame(self, fg_color="transparent"); middle_frame.pack(pady=10, padx=10, fill="both", expand=True)
         try:
-            logo_path = resource_path(os.path.join("images", "logo.png"))
+            logo_path = resource_path(os.path.join("Icons", "logo.png"))
             img = Image.open(logo_path).resize((150, 150), Image.Resampling.LANCZOS)
             self.logo_img = ctk.CTkImage(light_image=img, dark_image=img, size=(150, 150))
             logo_widget = ctk.CTkLabel(middle_frame, image=self.logo_img, text=""); logging.debug("Логотип logo.png загружен.")
@@ -504,14 +505,14 @@ class VoxShareGUI(ctk.CTk):
         except Exception as e: logging.warning(f"Не удалось загрузить или обработать logo.png: {e}"); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Лого Ошибка]", width=150, height=150, fg_color="grey")
         logo_widget.pack(side="left", padx=(0, 20), anchor="n")
         peer_list_frame = ctk.CTkFrame(middle_frame); peer_list_frame.pack(side="left", fill="both", expand=True)
-        ctk.CTkLabel(peer_list_frame, text="Участники:", font=("Arial", 14)).pack(anchor="w", padx=5)
+        ctk.CTkLabel(peer_list_frame, text="Peers:", font=("Arial", 14)).pack(anchor="w", padx=5)
         self.peer_list_textbox = ctk.CTkTextbox(peer_list_frame, font=("Arial", 12), wrap="none")
         self.peer_list_textbox.pack(side="top", fill="both", expand=True, padx=5, pady=(0,5)); self.peer_list_textbox.configure(state="disabled")
         bottom_frame = ctk.CTkFrame(self, fg_color="transparent"); bottom_frame.pack(side="bottom", pady=10, padx=10, fill="x")
         bottom_frame.columnconfigure(0, weight=1)
         self.led = ctk.CTkLabel(bottom_frame, text="", width=30, height=30, corner_radius=15, fg_color="#D50000"); self.led.grid(row=0, column=0, padx=10, pady=(5, 2))
         self.volume_bar = ctk.CTkProgressBar(bottom_frame, height=20); self.volume_bar.set(0); self.volume_bar.grid(row=1, column=0, padx=50, pady=2, sticky="ew")
-        self.talk_btn = ctk.CTkButton(bottom_frame, text="Говорить", height=40, font=("Arial", 16)); self.talk_btn.grid(row=2, column=0, padx=50, pady=(5, 5), sticky="ew")
+        self.talk_btn = ctk.CTkButton(bottom_frame, text="Speak", height=40, font=("Arial", 16)); self.talk_btn.grid(row=2, column=0, padx=50, pady=(5, 5), sticky="ew")
         self.talk_btn.bind("<ButtonPress-1>", self.on_press); self.talk_btn.bind("<ButtonRelease-1>", self.on_release)
         self.bind("<KeyPress-space>", self.on_press); self.bind("<KeyRelease-space>", self.on_release)
         self.bind("<Button-1>", lambda event: self.focus_set())
@@ -721,3 +722,4 @@ if __name__ == "__main__":
     except Exception as e: logging.exception("Критическая необработанная ошибка на верхнем уровне"); sys.exit(1)
     logging.info("="*20 + " Приложение штатно завершено " + "="*20)
     print("Приложение завершено.")
+    
