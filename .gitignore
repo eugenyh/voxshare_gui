@@ -40,5 +40,6 @@ config.json
 
 #nuitka
 nuitka-crash-report.xml
+nutika-dist/
 *.build
 *.dist
