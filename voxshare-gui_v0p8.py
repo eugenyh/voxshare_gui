@@ -152,7 +152,7 @@ class AudioTransceiver:
         try:
             self.local_ip = socket.gethostbyname(socket.gethostname())
         except socket.gaierror:
-             logging.warning("Не удалось определить локальный IP по hostname, используется '127.0.0.1'")
+             logging.warning("Failed to determine local IP by hostname, using '127.0.0.1'")
              self.local_ip = "127.0.0.1"
 
         # *** CHANGE: Structure of active_clients ***
@@ -196,125 +196,125 @@ class AudioTransceiver:
             self.sock_recv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                  self.sock_recv.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.socket_buffer_size)
-                 logging.info(f"Установлен размер буфера приема сокета: {self.socket_buffer_size}")
+                 logging.info(f"Set socket receive buffer size: {self.socket_buffer_size}")
             except socket.error as e:
-                 logging.warning(f"Не удалось установить размер буфера приема сокета: {e}")
+                 logging.warning(f"Failed to set socket receive buffer size: {e}")
             self.sock_recv.bind(("", self.port))
             mreq = struct.pack("4sl", socket.inet_aton(self.mcast_grp), socket.INADDR_ANY)
             self.sock_recv.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-            logging.info(f"Сокеты инициализированы. Прием на порту {self.port}, группа {self.mcast_grp}")
+            logging.info(f"Sockets initialized. Receiving on port {self.port}, group {self.mcast_grp}")
         except socket.error as e:
-            logging.exception("Критическая ошибка инициализации сокетов")
-            raise RuntimeError(f"Ошибка инициализации сокетов: {e}")
+            logging.exception("Critical socket initialization error")
+            raise RuntimeError(f"Socket initialization error: {e}")
         except Exception as e:
-             logging.exception("Неожиданная критическая ошибка инициализации сокетов")
-             raise RuntimeError(f"Неожиданная ошибка инициализации сокетов: {e}")
+             logging.exception("Unexpected critical socket initialization error")
+             raise RuntimeError(f"Unexpected socket initialization error: {e}")
 
     def cleanup(self):
-        """Очистка ресурсов"""
-        logging.info("Начало очистки ресурсов AudioTransceiver...")
+        """Cleanup resources"""
+        logging.info("Starting AudioTransceiver resource cleanup...")
         self.shutdown_event.set()
         time.sleep(0.2)
         if hasattr(self, 'sock_send'):
-            try: self.sock_send.close(); logging.info("Сокет отправки закрыт.")
-            except Exception as e: logging.error(f"Ошибка при закрытии сокета отправки: {e}")
+            try: self.sock_send.close(); logging.info("Send socket closed.")
+            except Exception as e: logging.error(f"Error closing send socket: {e}")
         if hasattr(self, 'sock_recv'):
             try:
                 mreq = struct.pack("4sl", socket.inet_aton(self.mcast_grp), socket.INADDR_ANY)
                 self.sock_recv.setsockopt(socket.IPPROTO_IP, socket.IP_DROP_MEMBERSHIP, mreq)
-                logging.info(f"Покинута multicast группа {self.mcast_grp}.")
-            except socket.error as e: logging.warning(f"Не удалось покинуть multicast группу (возможно, сокет уже закрыт): {e}")
-            except Exception as e: logging.error(f"Ошибка при попытке покинуть multicast группу: {e}")
-            try: self.sock_recv.close(); logging.info("Сокет приема закрыт.")
-            except Exception as e: logging.error(f"Ошибка при закрытии сокета приема: {e}")
-        logging.info("Очистка AudioTransceiver завершена.")
+                logging.info(f"Left multicast group {self.mcast_grp}.")
+            except socket.error as e: logging.warning(f"Failed to leave multicast group (socket may already be closed): {e}")
+            except Exception as e: logging.error(f"Error attempting to leave multicast group: {e}")
+            try: self.sock_recv.close(); logging.info("Receive socket closed.")
+            except Exception as e: logging.error(f"Error closing receive socket: {e}")
+        logging.info("AudioTransceiver cleanup complete.")
 
     def encode_and_send_audio(self, pcm_data_bytes):
-        """Кодирование PCM данных в Opus и отправка"""
+        """Encoding PCM data to Opus and sending"""
         if self.shutdown_event.is_set(): return
         try:
             encoded_data = self.encoder.encode(pcm_data_bytes, self.block_size)
             self.sock_send.sendto(self.packet_type_audio + encoded_data, (self.mcast_grp, self.port))
-        except opuslib.OpusError as e: logging.error(f"Ошибка кодирования Opus: {e}")
-        except socket.error as e: logging.error(f"Ошибка отправки аудио: {e}")
-        except Exception as e: logging.exception(f"Неожиданная ошибка при кодировании/отправке аудио")
+        except opuslib.OpusError as e: logging.error(f"Opus encoding error: {e}")
+        except socket.error as e: logging.error(f"Audio sending error: {e}")
+        except Exception as e: logging.exception(f"Unexpected error during audio encoding/sending")
 
     def send_ping(self):
-        """Отправка ping-пакета с никнеймом"""
+        """Sending a ping packet with the nickname"""
         if self.shutdown_event.is_set(): return
         try:
-            # *** ИЗМЕНЕНИЕ: Добавляем никнейм к пакету ***
+            # *** CHANGE: Adding nickname to the packet ***
             nickname_bytes = self.nickname.encode('utf-8')
             ping_packet = self.packet_type_ping + nickname_bytes
             # **********************************************
             self.sock_send.sendto(ping_packet, (self.mcast_grp, self.port))
-            logging.debug(f"Отправлен PING пакет (ник: '{self.nickname}')")
+            logging.debug(f"Sent PING packet (nick: '{self.nickname}')")
         except socket.error as e:
-            if not self.shutdown_event.is_set(): logging.error(f"Ошибка отправки ping: {e}")
+            if not self.shutdown_event.is_set(): logging.error(f"Ping sending error: {e}")
         except Exception as e:
-             if not self.shutdown_event.is_set(): logging.exception("Неожиданная ошибка при отправке ping")
+             if not self.shutdown_event.is_set(): logging.exception("Unexpected error during ping sending")
 
     def receive_packets(self):
-        """Получение пакетов в цикле"""
-        logging.info("Поток приема пакетов запущен.")
+        """Receiving packets in a loop"""
+        logging.info("Packet receiving thread started.")
         while not self.shutdown_event.is_set():
             try:
                 data, addr = self.sock_recv.recvfrom(self.socket_buffer_size)
-                logging.debug(f"Получен пакет {len(data)} байт от {addr}")
+                logging.debug(f"Received packet {len(data)} bytes from {addr}")
 
                 if addr[0] == self.local_ip: continue
 
                 if data.startswith(self.packet_type_audio):
                     opus_packet = data[len(self.packet_type_audio):]
                     packet_tuple = (addr[0], opus_packet)
-                    try: self.received_opus_packets.put_nowait(packet_tuple); logging.debug(f"Аудио пакет ({len(opus_packet)} байт от {addr[0]}) добавлен в очередь.")
+                    try: self.received_opus_packets.put_nowait(packet_tuple); logging.debug(f"Audio packet ({len(opus_packet)} bytes from {addr[0]}) added to queue.")
                     except queue.Full:
-                        try: dropped_tuple = self.received_opus_packets.get_nowait(); self.received_opus_packets.put_nowait(packet_tuple); logging.warning(f"Очередь аудио пакетов полна. Отброшен пакет от {dropped_tuple[0]}.")
+                        try: dropped_tuple = self.received_opus_packets.get_nowait(); self.received_opus_packets.put_nowait(packet_tuple); logging.warning(f"Audio packet queue full. Dropped packet from {dropped_tuple[0]}.")
                         except queue.Empty: pass
-                        except queue.Full: logging.warning("Очередь полна даже после удаления, новый пакет пропущен.")
+                        except queue.Full: logging.warning("Queue is full even after removal, new packet skipped.")
 
                 elif data.startswith(self.packet_type_ping):
-                    # *** ИЗМЕНЕНИЕ: Извлекаем никнейм, обновляем структуру active_clients ***
+                    # *** CHANGE: Extracting nickname, updating active_clients structure ***
                     nickname_bytes = data[len(self.packet_type_ping):]
                     try:
                         nickname = nickname_bytes.decode('utf-8', errors='replace').strip()
                     except Exception as e:
-                        logging.warning(f"Не удалось декодировать никнейм из PING от {addr[0]}: {e}")
-                        nickname = "" # Используем пустой ник при ошибке
+                        logging.warning(f"Failed to decode nickname from PING from {addr[0]}: {e}")
+                        nickname = "" # Use empty nick on error
 
                     with self.clients_lock:
-                        # Обновляем или создаем запись клиента
-                        client_info = self.active_clients.get(addr[0], {}) # Получаем существующую или пустую инфу
+                        # Update or create client record
+                        client_info = self.active_clients.get(addr[0], {}) # Get existing or empty info
                         client_info['last_seen'] = time.time()
-                        client_info['nickname'] = nickname # Сохраняем/обновляем ник
-                        self.active_clients[addr[0]] = client_info # Записываем обратно
-                    logging.info(f"Получен PING от {addr[0]} (Ник: '{nickname}'). Клиент активен.")
+                        client_info['nickname'] = nickname # Save/update nick
+                        self.active_clients[addr[0]] = client_info # Write back
+                    logging.info(f"Received PING from {addr[0]} (Nick: '{nickname}'). Client active.")
                     # ***********************************************************************
                 else:
-                    logging.warning(f"Получен неизвестный тип пакета от {addr}: {data[:10]}...")
+                    logging.warning(f"Received unknown packet type from {addr}: {data[:10]}...")
 
             except socket.timeout: continue
             except socket.error as e:
-                if self.shutdown_event.is_set(): logging.info("Сокет закрыт, поток приема завершается."); break
+                if self.shutdown_event.is_set(): logging.info("Socket closed, receiving thread is terminating."); break
                 else:
-                    if not self.shutdown_event.is_set(): logging.error(f"Ошибка сокета при получении пакета: {e}")
+                    if not self.shutdown_event.is_set(): logging.error(f"Socket error while receiving packet: {e}")
                     time.sleep(0.1)
             except Exception as e:
-                 if not self.shutdown_event.is_set(): logging.exception("Неожиданная ошибка в receive_packets")
-        logging.info("Поток приема пакетов завершен.")
+                 if not self.shutdown_event.is_set(): logging.exception("Unexpected error in receive_packets")
+        logging.info("Packet reception thread finished.")
 
-    # --- decode_audio, get_decoded_audio_packet (без изменений) ---
+    # --- decode_audio, get_decoded_audio_packet ---
     def decode_audio(self, opus_packet):
-        """Декодирование Opus пакета в PCM"""
+        """Decodes an Opus packet into PCM"""
         try:
             pcm_data = self.decoder.decode(opus_packet, self.block_size)
             logging.debug(f"Декодирован пакет {len(opus_packet)} байт -> {len(pcm_data)} байт PCM")
             return pcm_data
-        except opuslib.OpusError as e: logging.error(f"Ошибка декодирования Opus пакета ({len(opus_packet)} байт): {e}"); return None
-        except Exception as e: logging.exception(f"Неожиданная ошибка декодирования пакета ({len(opus_packet)} байт)"); return None
+        except opuslib.OpusError as e: logging.error(f"Error decoding Opus packet ({len(opus_packet)} bytes): {e}"); return None
+        except Exception as e: logging.exception(f"Unexpected error decoding packet ({len(opus_packet)} bytes)"); return None
 
     def get_decoded_audio_packet(self):
-        """Извлекает Opus пакет из очереди и декодирует его. Возвращает (sender_ip, audio_data) или None."""
+        """Retrieves an Opus packet from the queue and decodes it. Returns (sender_ip, audio_data) or None."""
         try:
             sender_ip, opus_packet = self.received_opus_packets.get_nowait()
             decoded_pcm = self.decode_audio(opus_packet)
@@ -322,54 +322,54 @@ class AudioTransceiver:
                  audio_data = np.frombuffer(decoded_pcm, dtype=self.dtype)
                  expected_size = self.block_size * self.channels
                  if audio_data.size == expected_size: return sender_ip, audio_data
-                 else: logging.warning(f"Неожиданный размер декодированного пакета от {sender_ip} ({audio_data.size} вместо {expected_size})"); return None
+                 else: logging.warning(f"Unexpected size of decoded packet from {sender_ip} ({audio_data.size} instead of {expected_size})"); return None
             else: return None
         except queue.Empty: return None
-        except Exception as e: logging.exception("Неожиданная ошибка в get_decoded_audio_packet"); return None
+        except Exception as e: logging.exception("Unexpected error in get_decoded_audio_packet"); return None
 
     def cleanup_inactive_clients(self):
-        """Очистка неактивных клиентов"""
+        """Cleanup of inactive clients"""
         current_time = time.time()
         inactive_ips = []
         client_timeout = self.net_config.get('client_timeout_sec', 5)
 
         with self.clients_lock:
-            all_client_ips = list(self.active_clients.keys()) # Копия ключей для безопасной итерации
+            all_client_ips = list(self.active_clients.keys()) # Copy of keys for safe iteration
 
         for ip in all_client_ips:
             last_seen = None
             with self.clients_lock:
-                # Получаем время последнего пинга для IP
+                # Get the last ping time for the IP
                 client_info = self.active_clients.get(ip)
                 if client_info:
                     last_seen = client_info.get('last_seen')
 
-            if last_seen is None: continue # Если клиент был удален в другом потоке
+            if last_seen is None: continue # If the client was removed in another thread
 
             if current_time - last_seen > client_timeout:
                 inactive_ips.append(ip)
 
         if inactive_ips:
-            logging.debug(f"Кандидаты на удаление по таймауту: {inactive_ips}")
+            logging.debug(f"Candidates for removal due to timeout: {inactive_ips}")
             with self.clients_lock:
                 for ip in inactive_ips:
-                    # Перепроверяем перед удалением
+                    # Double-check before removing
                     client_info = self.active_clients.get(ip)
                     if client_info and current_time - client_info.get('last_seen', 0) > client_timeout:
                         nickname = client_info.get('nickname', '')
-                        logging.info(f"Удаляем неактивного клиента: {ip} (Ник: '{nickname}', посл. раз: {current_time - client_info.get('last_seen', 0):.1f} сек назад)")
+                        logging.info(f"Removing inactive client: {ip} (Nickname: '{nickname}', last seen: {current_time - client_info.get('last_seen', 0):.1f} seconds ago)")
                         del self.active_clients[ip]
 
 
-# --- GUI Выбора устройств ---
+# --- GUI Device Selection ---
 class AudioSelector(ctk.CTk):
     def __init__(self, gui_config):
         super().__init__()
         self.gui_config = gui_config
-        self.title("Выбор аудиоустройств")
+        self.title("Select audio devices")
         geometry = self.gui_config.get('selector_geometry', '500x350')
         try: self.geometry(geometry)
-        except Exception as e: logging.warning(f"Некорректная геометрия для AudioSelector в конфиге ('{geometry}'): {e}. Используется 500x350."); self.geometry("500x350")
+        except Exception as e: logging.warning(f"Incorrect geometry for AudioSelector in config ('{geometry}'): {e}. Using 500x350."); self.geometry("500x350")
         self.resizable(False, False)
         self.input_device_index = None
         self.output_device_index = None
@@ -377,19 +377,19 @@ class AudioSelector(ctk.CTk):
         self.bind("<Escape>", lambda e: self.destroy())
 
     def create_widgets(self):
-        ctk.CTkLabel(self, text="Выберите микрофон:", font=("Arial", 14)).pack(pady=10)
+        ctk.CTkLabel(self, text="Select microphone:", font=("Arial", 14)).pack(pady=10)
         input_devices = self.get_device_list(input=True)
         self.input_combo = ctk.CTkComboBox(self, values=input_devices, width=400)
         if input_devices: self.input_combo.set(input_devices[0])
-        else: logging.warning("Не найдено ни одного устройства ввода.")
+        else: logging.warning("No input devices found.")
         self.input_combo.pack()
-        ctk.CTkLabel(self, text="Выберите устройство вывода:", font=("Arial", 14)).pack(pady=20)
+        ctk.CTkLabel(self, text="Select output device:", font=("Arial", 14)).pack(pady=20)
         output_devices = self.get_device_list(output=True)
         self.output_combo = ctk.CTkComboBox(self, values=output_devices, width=400)
         if output_devices: self.output_combo.set(output_devices[0])
-        else: logging.warning("Не найдено ни одного устройства вывода.")
+        else: logging.warning("No output devices found.")
         self.output_combo.pack()
-        ctk.CTkButton(self, text="Продолжить", command=self.validate_and_launch).pack(pady=30)
+        ctk.CTkButton(self, text="Continue", command=self.validate_and_launch).pack(pady=30)
         self.error_label = ctk.CTkLabel(self, text="", text_color="red", font=("Arial", 12))
         self.error_label.pack(pady=(0, 10))
         self.after(100, lambda: self.focus_force())
@@ -399,19 +399,19 @@ class AudioSelector(ctk.CTk):
             devices = sd.query_devices()
             device_list = []
             for i, dev in enumerate(devices):
-                if not dev or not isinstance(dev, dict) or not dev.get('name'): logging.warning(f"Пропущено некорректное устройство с индексом {i}: {dev}"); continue
+                if not dev or not isinstance(dev, dict) or not dev.get('name'): logging.warning(f"Skipping invalid device with index {i}: {dev}"); continue
                 is_input = dev.get('max_input_channels', 0) > 0
                 is_output = dev.get('max_output_channels', 0) > 0
                 if (input and is_input) or (output and is_output):
                      try: device_list.append(f"{i}: {dev['name']}")
-                     except Exception as enc_e: logging.warning(f"Проблема с именем устройства {i}: {dev.get('name')}. Ошибка: {enc_e}. Пропускаем.")
-            logging.info(f"Найдено устройств {'ввода' if input else 'вывода'}: {len(device_list)}")
+                     except Exception as enc_e: logging.warning(f"Problem with device name {i}: {dev.get('name')}. Error: {enc_e}. Skipping.")
+            logging.info(f"Found {'input' if input else 'output'} devices: {len(device_list)}")
             return device_list
-        except sd.PortAudioError as e: logging.exception("Ошибка PortAudio при получении списка устройств"); self._update_error_label(f"Ошибка чтения устройств: {e}"); return []
-        except Exception as e: logging.exception("Неожиданная ошибка при получении списка устройств"); self._update_error_label("Критическая ошибка чтения устройств!"); return []
+        except sd.PortAudioError as e: logging.exception("PortAudio error while getting device list"); self._update_error_label(f"Error reading devices: {e}"); return []
+        except Exception as e: logging.exception("Unexpected error while getting device list"); self._update_error_label("Critical error reading devices!"); return []
 
     def _update_error_label(self, text):
-         """Безопасное обновление метки ошибки."""
+         """Safely updates the error label."""
          if hasattr(self, 'error_label') and self.error_label.winfo_exists():
               self.error_label.configure(text=text)
 
@@ -419,45 +419,45 @@ class AudioSelector(ctk.CTk):
         input_selection = self.input_combo.get()
         output_selection = self.output_combo.get()
         try:
-            if not input_selection or not output_selection: raise ValueError("Не выбрано одно или оба устройства.")
-            if not ":" in input_selection or not ":" in output_selection: raise ValueError("Некорректный формат выбранного устройства.")
+            if not input_selection or not output_selection: raise ValueError("One or both devices not selected.")
+            if not ":" in input_selection or not ":" in output_selection: raise ValueError("Incorrect format of the selected device.")
             self.input_device_index = int(input_selection.split(":")[0])
             self.output_device_index = int(output_selection.split(":")[0])
-            logging.info(f"Выбраны устройства: Ввод={self.input_device_index} ('{input_selection}'), Вывод={self.output_device_index} ('{output_selection}')")
+            logging.info(f"Selected devices: Input={self.input_device_index} ('{input_selection}'), Output={self.output_device_index} ('{output_selection}')")
             global config
             audio_cfg = config.get('audio', {})
             rate = audio_cfg.get('sample_rate', 48000); chans = audio_cfg.get('channels', 1); dtype = audio_cfg.get('dtype', 'int16')
             try:
-                 logging.debug(f"Проверка настроек ввода: dev={self.input_device_index}, rate={rate}, chans={chans}, dtype={dtype}")
+                 logging.debug(f"Checking input settings: dev={self.input_device_index}, rate={rate}, chans={chans}, dtype={dtype}")
                  sd.check_input_settings(device=self.input_device_index, channels=chans, samplerate=rate, dtype=dtype)
-                 logging.debug(f"Проверка настроек вывода: dev={self.output_device_index}, rate={rate}, chans={chans}, dtype={dtype}")
+                 logging.debug(f"Checking output settings: dev={self.output_device_index}, rate={rate}, chans={chans}, dtype={dtype}")
                  sd.check_output_settings(device=self.output_device_index, channels=chans, samplerate=rate, dtype=dtype)
-                 logging.info("Настройки аудиоустройств успешно проверены.")
-            except sd.PortAudioError as pa_err: logging.error(f"Ошибка проверки настроек PortAudio: {pa_err}"); raise ValueError(f"Устройство не поддерживает настройки ({rate}Hz, {chans}ch, {dtype}): {pa_err}")
-            except ValueError as val_err: logging.error(f"Ошибка проверки настроек sounddevice (ValueError): {val_err}"); raise ValueError(f"Некорректный индекс устройства или ошибка: {val_err}")
-            except Exception as e: logging.exception("Ошибка проверки настроек sounddevice"); raise ValueError(f"Ошибка проверки устройства: {e}")
+                 logging.info("Audio device settings checked successfully.")
+            except sd.PortAudioError as pa_err: logging.error(f"PortAudio settings check error: {pa_err}"); raise ValueError(f"Device does not support settings ({rate}Hz, {chans}ch, {dtype}): {pa_err}")
+            except ValueError as val_err: logging.error(f"sounddevice settings check error (ValueError): {val_err}"); raise ValueError(f"Incorrect device index or error: {val_err}")
+            except Exception as e: logging.exception("sounddevice settings check error"); raise ValueError(f"Device check error: {e}")
             self._update_error_label("")
             self.destroy()
-            # *** ИЗМЕНЕНИЕ: Передаем user_config в VoxShareGUI ***
+            # *** CHANGE: Passing user_config to VoxShareGUI ***
             main_app = VoxShareGUI(
                 input_device_index=self.input_device_index,
                 output_device_index=self.output_device_index,
-                user_config=config.get('user', {}), # <--- Добавлено
+                user_config=config.get('user', {}), 
                 gui_config=self.gui_config,
                 net_config=config.get('network',{}),
                 audio_config=config.get('audio',{})
                 )
             # ****************************************************
             main_app.mainloop()
-        except (ValueError, AttributeError, IndexError) as e: error_message = f"Ошибка выбора: {e}"; logging.warning(f"Ошибка валидации выбора устройств: {e}"); self._update_error_label(error_message)
-        except Exception as e: logging.exception("Неожиданная ошибка при валидации и запуске"); self._update_error_label("Произошла критическая ошибка!")
+        except (ValueError, AttributeError, IndexError) as e: error_message = f"Selection error: {e}"; logging.warning(f"Device selection validation error: {e}"); self._update_error_label(error_message)
+        except Exception as e: logging.exception("Unexpected error during validation and launch"); self._update_error_label("A critical error occurred!")
 
-# --- Основное GUI Приложения ---
+# --- Main Application GUI ---
 class VoxShareGUI(ctk.CTk):
-    # *** ИЗМЕНЕНИЕ: Принимает user_config ***
+    # *** CHANGE: Accepts user_config ***
     def __init__(self, input_device_index, output_device_index, user_config, gui_config, net_config, audio_config):
         super().__init__()
-        self.user_config = user_config # <--- Сохраняем
+        self.user_config = user_config 
         self.gui_config = gui_config
         self.net_config = net_config
         self.audio_config = audio_config
@@ -465,7 +465,7 @@ class VoxShareGUI(ctk.CTk):
         self.title("VoxShare")
         geometry = self.gui_config.get('main_geometry', '550x450')
         try: self.geometry(geometry)
-        except Exception as e: logging.warning(f"Некорректная геометрия для VoxShareGUI в конфиге ('{geometry}'): {e}. Используется 550x450."); self.geometry("550x450")
+        except Exception as e: logging.warning(f"Incorrect geometry for VoxShareGUI in config ('{geometry}'): {e}. Using 550x450."); self.geometry("550x450")
         self.resizable(False, False)
         self.input_device_index = input_device_index
         self.output_device_index = output_device_index
@@ -476,23 +476,23 @@ class VoxShareGUI(ctk.CTk):
         self.last_packet_played_time = 0
         self.speaker_lock = Lock()
         try:
-             # *** ИЗМЕНЕНИЕ: Передаем user_config в AudioTransceiver ***
+            # *** CHANGE: Passing user_config to AudioTransceiver ***
             self.audio_transceiver = AudioTransceiver(
-                user_config=self.user_config, # <--- Передаем
+                user_config=self.user_config, 
                 net_config=self.net_config,
                 audio_config=self.audio_config
                 )
             # **********************************************************
-        except RuntimeError as e: logging.exception("Критическая ошибка при инициализации AudioTransceiver"); self.destroy(); return
-        except Exception as e: logging.exception("Неожиданная критическая ошибка при инициализации AudioTransceiver"); self.destroy(); return
+        except RuntimeError as e: logging.exception("Critical error during AudioTransceiver initialization"); self.destroy(); return
+        except Exception as e: logging.exception("Unexpected critical error during AudioTransceiver initialization"); self.destroy(); return
         self.setup_gui()
         self.start_threads()
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        logging.info("Основное окно VoxShareGUI инициализировано.")
+        logging.info("Main VoxShareGUI window initialized.")
 
-    # --- setup_gui, start_threads, audio_input_thread, audio_output_thread (без изменений) ---
+    # --- setup_gui, start_threads, audio_input_thread, audio_output_thread ---
     def setup_gui(self):
-        """Настройка графического интерфейса"""
+        """GUI configuration"""
         top_frame = ctk.CTkFrame(self, fg_color="transparent"); top_frame.pack(pady=10, padx=10, fill="x")
         ctk.CTkLabel(top_frame, text="VoxShare", font=("Arial", 24)).pack()
         middle_frame = ctk.CTkFrame(self, fg_color="transparent"); middle_frame.pack(pady=10, padx=10, fill="both", expand=True)
@@ -500,9 +500,9 @@ class VoxShareGUI(ctk.CTk):
             logo_path = resource_path(os.path.join("Icons", "logo.png"))
             img = Image.open(logo_path).resize((150, 150), Image.Resampling.LANCZOS)
             self.logo_img = ctk.CTkImage(light_image=img, dark_image=img, size=(150, 150))
-            logo_widget = ctk.CTkLabel(middle_frame, image=self.logo_img, text=""); logging.debug("Логотип logo.png загружен.")
-        except FileNotFoundError: logging.warning("Файл logo.png не найден."); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Лого]", width=150, height=150, fg_color="grey")
-        except Exception as e: logging.warning(f"Не удалось загрузить или обработать logo.png: {e}"); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Лого Ошибка]", width=150, height=150, fg_color="grey")
+            logo_widget = ctk.CTkLabel(middle_frame, image=self.logo_img, text=""); logging.debug("Logo logo.png loaded.")
+        except FileNotFoundError: logging.warning("File logo.png not found."); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Logo]", width=150, height=150, fg_color="grey")
+        except Exception as e: logging.warning(f"Failed to load or process logo.png: {e}"); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Logo error]", width=150, height=150, fg_color="grey")
         logo_widget.pack(side="left", padx=(0, 20), anchor="n")
         peer_list_frame = ctk.CTkFrame(middle_frame); peer_list_frame.pack(side="left", fill="both", expand=True)
         ctk.CTkLabel(peer_list_frame, text="Peers:", font=("Arial", 14)).pack(anchor="w", padx=5)
@@ -516,163 +516,162 @@ class VoxShareGUI(ctk.CTk):
         self.talk_btn.bind("<ButtonPress-1>", self.on_press); self.talk_btn.bind("<ButtonRelease-1>", self.on_release)
         self.bind("<KeyPress-space>", self.on_press); self.bind("<KeyRelease-space>", self.on_release)
         self.bind("<Button-1>", lambda event: self.focus_set())
-        logging.debug("Элементы GUI основного окна созданы и размещены.")
+        logging.debug("GUI elements of the main window created and placed.")
         self.after(100, lambda: self.focus_force())
 
     def start_threads(self):
-        """Запуск рабочих потоков"""
-        if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: logging.error("Ошибка: audio_transceiver не инициализирован, потоки не запускаются."); return
-        logging.info("Запуск рабочих потоков...")
+        """Starting worker threads"""
+        if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: logging.error("Error: audio_transceiver not initialized, threads not started."); return
+        logging.info("Starting worker threads...")
         self.input_thread = threading.Thread(target=self.audio_input_thread, name="AudioInputThread", daemon=True)
         self.output_thread = threading.Thread(target=self.audio_output_thread, name="AudioOutputThread", daemon=True)
         self.receive_thread = threading.Thread(target=self.receive_thread, name="ReceiveThread", daemon=True)
         self.ping_thread = threading.Thread(target=self.ping_thread, name="PingThread", daemon=True)
         self.cleanup_thread = threading.Thread(target=self.client_cleanup_thread, name="ClientCleanupThread", daemon=True)
         self.input_thread.start(); self.output_thread.start(); self.receive_thread.start(); self.ping_thread.start(); self.cleanup_thread.start()
-        self.after(100, self.update_gui); logging.info("Все рабочие потоки запущены.")
+        self.after(100, self.update_gui); logging.info("All worker threads started.")
 
     def audio_input_thread(self):
-        """Поток для захвата аудио, кодирования и отправки"""
+        """Thread for capturing audio, encoding, and sending"""
         sample_rate = self.audio_transceiver.sample_rate; channels = self.audio_transceiver.channels; blocksize = self.audio_transceiver.block_size; dtype = self.audio_transceiver.dtype
         def callback(indata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
-            if status: logging.warning(f"Статус обратного вызова ввода: {status}")
+            if status: logging.warning(f"Input callback status: {status}")
             if not self.audio_transceiver.shutdown_event.is_set() and self.is_pressing:
                 try:
                     pcm_data_bytes = indata.tobytes(); self.audio_transceiver.encode_and_send_audio(pcm_data_bytes)
                     float_data = indata.astype(np.float32) / 32768.0; rms = np.sqrt(np.mean(np.square(float_data)))
                     with self.volume_lock: self.volume = float(rms) * 2.5
-                except Exception as e: logging.exception(f"Ошибка в audio_input callback во время передачи")
+                except Exception as e: logging.exception(f"Error in audio_input callback during transmission")
             else:
                  if not self.is_pressing or self.audio_transceiver.shutdown_event.is_set():
                      with self.volume_lock:
                          self.volume = 0.0
         try:
-            logging.info(f"Открытие InputStream: Устройство={self.input_device_index}, Rate={sample_rate}, Block={blocksize}, Dtype={dtype}")
+            logging.info(f"Opening InputStream: Device={self.input_device_index}, Rate={sample_rate}, Block={blocksize}, Dtype={dtype}")
             with sd.InputStream(samplerate=sample_rate, channels=channels, dtype=dtype, callback=callback, blocksize=blocksize, device=self.input_device_index):
-                logging.info("InputStream открыт. Ожидание сигнала завершения...")
+                logging.info("InputStream opened. Waiting for shutdown signal...")
                 self.audio_transceiver.shutdown_event.wait()
-        except sd.PortAudioError as e: logging.exception(f"Критическая ошибка аудио входа (PortAudioError) Устройство={self.input_device_index}")
-        except Exception as e: logging.exception(f"Критическая ошибка аудио входа (Другое) Устройство={self.input_device_index}")
-        logging.info("Поток аудио входа завершается.")
+        except sd.PortAudioError as e: logging.exception(f"Critical audio input error (PortAudioError) Device={self.input_device_index}")
+        except Exception as e: logging.exception(f"Critical audio input error (Other) Device={self.input_device_index}")
+        logging.info("Audio input thread is shutting down.")
 
     def audio_output_thread(self):
-        """Поток для получения декодированного аудио и воспроизведения"""
+        """Thread for receiving decoded audio and playing it"""
         sample_rate = self.audio_transceiver.sample_rate; channels = self.audio_transceiver.channels; blocksize = self.audio_transceiver.block_size; dtype = self.audio_transceiver.dtype
         def callback(outdata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
-            if status: logging.warning(f"Статус обратного вызова вывода: {status}")
+            if status: logging.warning(f"Output callback status: {status}")
             packet_info = self.audio_transceiver.get_decoded_audio_packet(); processed_ip = None
             if packet_info is not None:
                 sender_ip, audio_data = packet_info
-                if audio_data is not None and audio_data.size == frames * channels: outdata[:] = audio_data.reshape(-1, channels); processed_ip = sender_ip; logging.debug(f"Воспроизведен аудио пакет {len(audio_data)} сэмплов от {sender_ip}")
-                else: outdata.fill(0); logging.warning(f"Размер пакета от {sender_ip} не совпал ({audio_data.size} vs {frames * channels}), воспроизведена тишина.") if audio_data is not None else None
+                if audio_data is not None and audio_data.size == frames * channels: outdata[:] = audio_data.reshape(-1, channels); processed_ip = sender_ip; logging.debug(f"Played audio packet {len(audio_data)} samples from {sender_ip}")
+                else: outdata.fill(0); logging.warning(f"Packet size from {sender_ip} did not match ({audio_data.size} vs {frames * channels}), played silence.") if audio_data is not None else None
             else: outdata.fill(0)
             if not self.audio_transceiver.shutdown_event.is_set():
                 with self.speaker_lock:
                     if processed_ip: self.currently_speaking_ip = processed_ip; self.last_packet_played_time = time.time()
         try:
-            logging.info(f"Открытие OutputStream: Устройство={self.output_device_index}, Rate={sample_rate}, Block={blocksize}, Dtype={dtype}")
+            logging.info(f"Opening OutputStream: Device={self.output_device_index}, Rate={sample_rate}, Block={blocksize}, Dtype={dtype}")
             with sd.OutputStream(samplerate=sample_rate, channels=channels, dtype=dtype, callback=callback, blocksize=blocksize, device=self.output_device_index):
-                logging.info("OutputStream открыт. Ожидание сигнала завершения...")
+                logging.info("OutputStream opened. Waiting for shutdown signal...")
                 self.audio_transceiver.shutdown_event.wait()
-        except sd.PortAudioError as e: logging.exception(f"Критическая ошибка аудио выхода (PortAudioError) Устройство={self.output_device_index}")
-        except Exception as e: logging.exception(f"Критическая ошибка аудио выхода (Другое) Устройство={self.output_device_index}")
-        logging.info("Поток аудио вывода завершается.")
+        except sd.PortAudioError as e: logging.exception(f"Critical audio output error (PortAudioError) Device={self.output_device_index}")
+        except Exception as e: logging.exception(f"Critical audio output error (Other) Device={self.output_device_index}")
+        logging.info("Audio output thread is shutting down.")
 
-    # --- receive_thread, ping_thread, client_cleanup_thread (без изменений) ---
+    # --- receive_thread, ping_thread, client_cleanup_thread ---
     def receive_thread(self):
         if hasattr(self, 'audio_transceiver') and self.audio_transceiver: self.audio_transceiver.receive_packets()
-        else: logging.error("ReceiveThread: audio_transceiver не существует.")
+        else: logging.error("ReceiveThread: audio_transceiver does not exist.")
 
     def ping_thread(self):
-        logging.info("Поток отправки пингов запущен.")
-        if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: logging.error("PingThread: audio_transceiver не существует."); return
+        logging.info("Ping sending thread started.")
+        if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: logging.error("PingThread: audio_transceiver does not exist."); return
         ping_interval = self.net_config.get('ping_interval_sec', 2)
         while not self.audio_transceiver.shutdown_event.wait(timeout=ping_interval):
             self.audio_transceiver.send_ping()
-        logging.info("Поток отправки пингов завершается.")
+        logging.info("Ping sending thread is shutting down.")
 
     def client_cleanup_thread(self):
-        logging.info("Поток очистки клиентов запущен.")
+        logging.info("Ping sending thread started.")
         if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: logging.error("ClientCleanupThread: audio_transceiver не существует."); return
         cleanup_interval = 1.0
         while not self.audio_transceiver.shutdown_event.wait(timeout=cleanup_interval):
             self.audio_transceiver.cleanup_inactive_clients()
-        logging.info("Поток очистки клиентов завершается.")
-
+        logging.info("Ping sending thread is shutting down.")
 
     def update_gui(self):
-        """Обновление GUI (вызывается в основном потоке)"""
+        """GUI update (called in the main thread)"""
         try:
             if not self.winfo_exists() or not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: return
-            # Обновление громкости
+            # Volume update
             if hasattr(self, 'volume_bar') and self.volume_bar.winfo_exists():
                 with self.volume_lock: current_volume = min(1.0, max(0.0, self.volume))
                 self.volume_bar.set(current_volume)
 
-            # --- ИЗМЕНЕНИЕ: Обновление списка пиров с никнеймами ---
-            active_peers_data = {} # Словарь {ip: nickname}
+            # --- CHANGE: Updating the peer list with nicknames ---
+            active_peers_data = {} # Dictionary {ip: nickname}
             current_speaker = None
             now = time.time()
 
             try:
-                # Получаем копию словаря клиентов под блокировкой
+                # Get a copy of the clients dictionary under lock
                 with self.audio_transceiver.clients_lock:
                     active_peers_data = self.audio_transceiver.active_clients.copy()
             except AttributeError:
-                 logging.warning("update_gui: audio_transceiver не найден при доступе к clients_lock.")
+                 logging.warning("update_gui: audio_transceiver not found while accessing clients_lock.")
                  return
 
-            # Определяем говорящего и проверяем таймаут/активность
+            # Determine the speaker and check for timeout/activity
             with self.speaker_lock:
                 if self.currently_speaking_ip and (now - self.last_packet_played_time > SPEAKER_TIMEOUT_THRESHOLD):
-                    logging.debug(f"Сброс статуса говорящего для {self.currently_speaking_ip} по таймауту.")
+                    logging.debug(f"Resetting speaker status for {self.currently_speaking_ip} due to timeout.")
                     self.currently_speaking_ip = None
-                # Проверяем, что говорящий еще активен (есть в словаре)
+                # Check if the speaker is still active (present in the dictionary)
                 if self.currently_speaking_ip and self.currently_speaking_ip not in active_peers_data:
-                     logging.debug(f"Говорящий {self.currently_speaking_ip} больше не в списке активных пиров.")
+                     logging.debug(f"Speaker {self.currently_speaking_ip} is no longer in the list of active peers.")
                      self.currently_speaking_ip = None
                 current_speaker = self.currently_speaking_ip
 
-            # Обновляем текстовое поле
+            # Update the text box
             if hasattr(self, 'peer_list_textbox') and self.peer_list_textbox.winfo_exists():
                 try:
                      self.peer_list_textbox.configure(state="normal")
                      self.peer_list_textbox.delete("1.0", "end")
 
-                     # Сортируем IP адреса для стабильного отображения
+                     # Sort IP addresses for stable display
                      sorted_ips = sorted(active_peers_data.keys())
 
                      if sorted_ips:
                          for peer_ip in sorted_ips:
                              info = active_peers_data.get(peer_ip, {})
                              nickname = info.get('nickname', '')
-                             display_name = nickname if nickname else peer_ip # Используем ник, если есть, иначе IP
+                             display_name = nickname if nickname else peer_ip # Use nickname if available, otherwise IP
                              prefix = "* " if peer_ip == current_speaker else "  "
                              self.peer_list_textbox.insert("end", f"{prefix}{display_name}\n")
                      else:
-                         self.peer_list_textbox.insert("end", " (нет других участников)")
+                         self.peer_list_textbox.insert("end", " (no other peers)")
 
                      self.peer_list_textbox.configure(state="disabled")
                 except tkinter.TclError as e:
-                     logging.warning(f"Ошибка обновления peer_list_textbox (возможно, виджет уничтожен): {e}")
+                     logging.warning(f"Error updating peer_list_textbox (widget might be destroyed): {e}")
             # ------------------------------------------------------
 
-            # Планируем следующее обновление
+            # Schedule the next update
             if hasattr(self, 'audio_transceiver') and not self.audio_transceiver.shutdown_event.is_set():
                  self.after(100, self.update_gui)
-        except Exception as e: logging.exception("Неожиданная ошибка в update_gui")
+        except Exception as e: logging.exception("Unexpected error in update_gui")
 
-    # --- on_press, on_release, update_led, on_closing (без изменений) ---
+    # --- on_press, on_release, update_led, on_closing ---
     def on_press(self, event=None):
         if not self.is_pressing:
-            logging.info("Начало передачи (кнопка/пробел нажат)")
+            logging.info("Transmission started (button/space pressed)")
             self.is_pressing = True
             self.update_led(True)
             if hasattr(self, 'talk_btn') and self.talk_btn.winfo_exists(): self.talk_btn.configure(fg_color="#00A853")
 
     def on_release(self, event=None):
         if self.is_pressing:
-            logging.info("Остановка передачи (кнопка/пробел отпущен)")
+            logging.info("Transmission stopped (button/space released)")
             self.is_pressing = False
             self.update_led(False)
             if hasattr(self, 'talk_btn') and self.talk_btn.winfo_exists():
@@ -687,39 +686,38 @@ class VoxShareGUI(ctk.CTk):
         if hasattr(self, 'led') and self.led.winfo_exists(): self.led.configure(fg_color=color); logging.debug(f"LED индикатор установлен в {'ON' if on else 'OFF'}")
 
     def on_closing(self):
-        """Обработчик закрытия окна"""
-        logging.info("Получен сигнал закрытия окна (WM_DELETE_WINDOW).")
+        """Window closing handler"""
+        logging.info("Received window closing signal (WM_DELETE_WINDOW).")
         if hasattr(self, 'audio_transceiver') and self.audio_transceiver: self.audio_transceiver.cleanup()
-        logging.info("Уничтожение окна GUI...")
+        logging.info("Destroying GUI window...")
         try:
              self.unbind("<KeyPress-space>"); self.unbind("<KeyRelease-space>"); self.unbind("<Button-1>")
              self.destroy()
-        except Exception as e: logging.exception("Ошибка при уничтожении главного окна")
-        logging.info("Приложение завершило работу.")
+        except Exception as e: logging.exception("Error during main window destruction")
+        logging.info("Application finished.")
 
-
-# --- Точка входа ---
+# --- Entry point ---
 if __name__ == "__main__":
     load_config()
     setup_logging()
     try:
         gui_conf = config.get('gui', {})
         appearance_mode = gui_conf.get('appearance_mode', 'dark').lower()
-        if appearance_mode not in ['dark', 'light', 'system']: logging.warning(f"Некорректный режим темы '{appearance_mode}' в конфиге. Используется 'dark'."); appearance_mode = 'dark'
+        if appearance_mode not in ['dark', 'light', 'system']: logging.warning(f"Incorrect theme mode '{appearance_mode}' in config. Using 'dark'."); appearance_mode = 'dark'
         ctk.set_appearance_mode(appearance_mode)
-        logging.info(f"Установлена тема интерфейса: {appearance_mode}")
-    except Exception as e: logging.exception("Ошибка при установке темы интерфейса из конфига."); ctk.set_appearance_mode("dark")
+        logging.info(f"Interface theme set to: {appearance_mode}")
+    except Exception as e: logging.exception("Error setting interface theme from config."); ctk.set_appearance_mode("dark")
     try:
-        if not hasattr(opuslib, 'Encoder'): raise ImportError("opuslib не содержит ожидаемых атрибутов.")
-        logging.info(f"Библиотека opuslib найдена и импортирована.")
-    except ImportError: message = "Критическая ошибка: Библиотека opuslib не найдена. Установите ее: pip install opuslib"; print(message); logging.critical(message); sys.exit(1)
-    except Exception as e: message = f"Неожиданная ошибка при проверке opuslib: {e}"; print(message); logging.critical(message); sys.exit(1)
+        if not hasattr(opuslib, 'Encoder'): raise ImportError("opuslib does not contain expected attributes.")
+        logging.info(f"opuslib library found and imported.")
+    except ImportError: message = "Critical error: opuslib library not found. Install it: pip install opuslib"; print(message); logging.critical(message); sys.exit(1)
+    except Exception as e: message = f"Unexpected error while checking opuslib: {e}"; print(message); logging.critical(message); sys.exit(1)
     try:
-        # Передаем только gui часть конфига в селектор
+        # Passing only the gui part of the config to the selector
         selector = AudioSelector(gui_config=config.get('gui', {}))
-        # Главный цикл селектора запустит основное окно, если выбор успешен
+        # The main loop of the selector will launch the main window if selection is successful
         selector.mainloop()
-    except Exception as e: logging.exception("Критическая необработанная ошибка на верхнем уровне"); sys.exit(1)
-    logging.info("="*20 + " Приложение штатно завершено " + "="*20)
-    print("Приложение завершено.")
+    except Exception as e: logging.exception("Critical unhandled error at the top level"); sys.exit(1)
+    logging.info("="*20 + " Application finished normally " + "="*20)
+    print("Application finished.")        
     
