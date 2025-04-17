@@ -44,3 +44,6 @@ nutika-dist/
 *.build
 *.dist
 *.onefile-build
+
+#pyinstaller
+*.spec
