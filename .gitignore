@@ -43,3 +43,4 @@ nuitka-crash-report.xml
 nutika-dist/
 *.build
 *.dist
+*.onefile-build
