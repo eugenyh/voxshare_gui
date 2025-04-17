@@ -37,7 +37,7 @@ jobs:
           exe_name="voxshare-gui_v${version_number}.exe"
           echo "SCRIPT_NAME=$script_name" >> $GITHUB_ENV
           echo "EXE_NAME=$exe_name" >> $GITHUB_ENV
-          pyinstaller --onefile --noconsole --icon=Icons/logo32x32.ico --add-data "Icons/logo.png;images" --hidden-import=customtkinter "$script_name"
+          pyinstaller --onefile --noconsole --icon=Icons/logo.ico --add-data "Icons/logo.png;Icons" --hidden-import=customtkinter "$script_name"
           mv "dist/${script_name%.py}.exe" "dist/$exe_name"
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
