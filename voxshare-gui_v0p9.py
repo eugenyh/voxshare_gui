@@ -14,6 +14,7 @@ import json
 import logging
 import sys
 import tkinter # For checking the type of event
+import os
 
 # --- Global dictionary for settings ---
 config = {}
@@ -122,13 +123,13 @@ def setup_logging():
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
     try:
-        logging.basicConfig(level=log_level, format=log_format, filename=log_file, filemode='a', encoding='utf-8', force=True)
+        logging.basicConfig(level=log_level, format=log_format, filename=log_file, filemode='w', encoding='utf-8', force=True)
         logging.info("="*20 + " Application Start " + "="*20)
-        logging.info(f"Logging configured. Level: {log_level_str}, File: {log_file}")
-        print(f"Logging enabled. Level: {log_level_str}, File: {log_file}")
+        logging.info(f"Logging configured. Level: {log_level_str}, Файл: {log_file}")
+        print(f"Logging configured. Level: {log_level_str}, Файл: {log_file}")
     except IOError as e:
-        print(f"Error configuring logging to file {log_file}: {e}. Logging will be disabled.")
-        logging.disable(logging.CRITICAL)
+         print(f"Error configuring logging to file {log_file}: {e}. Logging will be disabled.")
+         logging.disable(logging.CRITICAL)
     except Exception as e:
         print(f"Unexpected error configuring logging: {e}. Logging will be disabled.")
         logging.disable(logging.CRITICAL)
@@ -151,8 +152,8 @@ class AudioTransceiver:
         try:
             self.local_ip = socket.gethostbyname(socket.gethostname())
         except socket.gaierror:
-            logging.warning("Failed to determine local IP by hostname, using '127.0.0.1'")
-            self.local_ip = "127.0.0.1"
+             logging.warning("Failed to determine local IP by hostname, using '127.0.0.1'")
+             self.local_ip = "127.0.0.1"
 
         # *** CHANGE: Structure of active_clients ***
         # Now stores {ip: {'nickname': str, 'last_seen': float}}
@@ -181,8 +182,8 @@ class AudioTransceiver:
             logging.exception("Critical Opus initialization error")
             raise RuntimeError(f"Opus initialization error: {e}")
         except Exception as e:
-            logging.exception("Unexpected critical Opus initialization error")
-            raise RuntimeError(f"Unexpected Opus initialization error: {e}")
+             logging.exception("Unexpected critical Opus initialization error")
+             raise RuntimeError(f"Unexpected Opus initialization error: {e}")
         self.init_sockets()
 
     # --- init_sockets, cleanup, encode_and_send_audio (no changes) ---
@@ -194,10 +195,10 @@ class AudioTransceiver:
             self.sock_recv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
             self.sock_recv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
-                self.sock_recv.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.socket_buffer_size)
-                logging.info(f"Set socket receive buffer size: {self.socket_buffer_size}")
+                 self.sock_recv.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, self.socket_buffer_size)
+                 logging.info(f"Set socket receive buffer size: {self.socket_buffer_size}")
             except socket.error as e:
-                logging.warning(f"Failed to set socket receive buffer size: {e}")
+                 logging.warning(f"Failed to set socket receive buffer size: {e}")
             self.sock_recv.bind(("", self.port))
             mreq = struct.pack("4sl", socket.inet_aton(self.mcast_grp), socket.INADDR_ANY)
             self.sock_recv.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
@@ -206,8 +207,8 @@ class AudioTransceiver:
             logging.exception("Critical socket initialization error")
             raise RuntimeError(f"Socket initialization error: {e}")
         except Exception as e:
-            logging.exception("Unexpected critical socket initialization error")
-            raise RuntimeError(f"Unexpected socket initialization error: {e}")
+             logging.exception("Unexpected critical socket initialization error")
+             raise RuntimeError(f"Unexpected socket initialization error: {e}")
 
     def cleanup(self):
         """Cleanup resources"""
@@ -251,7 +252,7 @@ class AudioTransceiver:
         except socket.error as e:
             if not self.shutdown_event.is_set(): logging.error(f"Ping sending error: {e}")
         except Exception as e:
-            if not self.shutdown_event.is_set(): logging.exception("Unexpected error during ping sending")
+             if not self.shutdown_event.is_set(): logging.exception("Unexpected error during ping sending")
 
     def receive_packets(self):
         """Receiving packets in a loop"""
@@ -297,17 +298,17 @@ class AudioTransceiver:
                 if self.shutdown_event.is_set(): logging.info("Socket closed, receiving thread is terminating."); break
                 else:
                     if not self.shutdown_event.is_set(): logging.error(f"Socket error while receiving packet: {e}")
-                    time.sleep(0.1)  
+                    time.sleep(0.1)
             except Exception as e:
-                    if not self.shutdown_event.is_set(): logging.exception("Unexpected error in receive_packets")
+                 if not self.shutdown_event.is_set(): logging.exception("Unexpected error in receive_packets")
         logging.info("Packet reception thread finished.")
 
-    # --- decode_audio, get_decoded_audio_packet (no changes) ---
+    # --- decode_audio, get_decoded_audio_packet ---
     def decode_audio(self, opus_packet):
         """Decodes an Opus packet into PCM"""
         try:
             pcm_data = self.decoder.decode(opus_packet, self.block_size)
-            logging.debug(f"Decoded packet {len(opus_packet)} bytes -> {len(pcm_data)} bytes PCM")
+            logging.debug(f"Декодирован пакет {len(opus_packet)} байт -> {len(pcm_data)} байт PCM")
             return pcm_data
         except opuslib.OpusError as e: logging.error(f"Error decoding Opus packet ({len(opus_packet)} bytes): {e}"); return None
         except Exception as e: logging.exception(f"Unexpected error decoding packet ({len(opus_packet)} bytes)"); return None
@@ -318,10 +319,10 @@ class AudioTransceiver:
             sender_ip, opus_packet = self.received_opus_packets.get_nowait()
             decoded_pcm = self.decode_audio(opus_packet)
             if decoded_pcm:
-                audio_data = np.frombuffer(decoded_pcm, dtype=self.dtype)
-                expected_size = self.block_size * self.channels
-                if audio_data.size == expected_size: return sender_ip, audio_data
-                else: logging.warning(f"Unexpected size of decoded packet from {sender_ip} ({audio_data.size} instead of {expected_size})"); return None
+                 audio_data = np.frombuffer(decoded_pcm, dtype=self.dtype)
+                 expected_size = self.block_size * self.channels
+                 if audio_data.size == expected_size: return sender_ip, audio_data
+                 else: logging.warning(f"Unexpected size of decoded packet from {sender_ip} ({audio_data.size} instead of {expected_size})"); return None
             else: return None
         except queue.Empty: return None
         except Exception as e: logging.exception("Unexpected error in get_decoded_audio_packet"); return None
@@ -402,17 +403,17 @@ class AudioSelector(ctk.CTk):
                 is_input = dev.get('max_input_channels', 0) > 0
                 is_output = dev.get('max_output_channels', 0) > 0
                 if (input and is_input) or (output and is_output):
-                    try: device_list.append(f"{i}: {dev['name']}")
-                    except Exception as enc_e: logging.warning(f"Problem with device name {i}: {dev.get('name')}. Error: {enc_e}. Skipping.")
+                     try: device_list.append(f"{i}: {dev['name']}")
+                     except Exception as enc_e: logging.warning(f"Problem with device name {i}: {dev.get('name')}. Error: {enc_e}. Skipping.")
             logging.info(f"Found {'input' if input else 'output'} devices: {len(device_list)}")
             return device_list
         except sd.PortAudioError as e: logging.exception("PortAudio error while getting device list"); self._update_error_label(f"Error reading devices: {e}"); return []
         except Exception as e: logging.exception("Unexpected error while getting device list"); self._update_error_label("Critical error reading devices!"); return []
-        
+
     def _update_error_label(self, text):
-        """Safely updates the error label."""
-        if hasattr(self, 'error_label') and self.error_label.winfo_exists():
-            self.error_label.configure(text=text)
+         """Safely updates the error label."""
+         if hasattr(self, 'error_label') and self.error_label.winfo_exists():
+              self.error_label.configure(text=text)
 
     def validate_and_launch(self):
         input_selection = self.input_combo.get()
@@ -427,11 +428,11 @@ class AudioSelector(ctk.CTk):
             audio_cfg = config.get('audio', {})
             rate = audio_cfg.get('sample_rate', 48000); chans = audio_cfg.get('channels', 1); dtype = audio_cfg.get('dtype', 'int16')
             try:
-                logging.debug(f"Checking input settings: dev={self.input_device_index}, rate={rate}, chans={chans}, dtype={dtype}")
-                sd.check_input_settings(device=self.input_device_index, channels=chans, samplerate=rate, dtype=dtype)
-                logging.debug(f"Checking output settings: dev={self.output_device_index}, rate={rate}, chans={chans}, dtype={dtype}")
-                sd.check_output_settings(device=self.output_device_index, channels=chans, samplerate=rate, dtype=dtype)
-                logging.info("Audio device settings checked successfully.")
+                 logging.debug(f"Checking input settings: dev={self.input_device_index}, rate={rate}, chans={chans}, dtype={dtype}")
+                 sd.check_input_settings(device=self.input_device_index, channels=chans, samplerate=rate, dtype=dtype)
+                 logging.debug(f"Checking output settings: dev={self.output_device_index}, rate={rate}, chans={chans}, dtype={dtype}")
+                 sd.check_output_settings(device=self.output_device_index, channels=chans, samplerate=rate, dtype=dtype)
+                 logging.info("Audio device settings checked successfully.")
             except sd.PortAudioError as pa_err: logging.error(f"PortAudio settings check error: {pa_err}"); raise ValueError(f"Device does not support settings ({rate}Hz, {chans}ch, {dtype}): {pa_err}")
             except ValueError as val_err: logging.error(f"sounddevice settings check error (ValueError): {val_err}"); raise ValueError(f"Incorrect device index or error: {val_err}")
             except Exception as e: logging.exception("sounddevice settings check error"); raise ValueError(f"Device check error: {e}")
@@ -441,11 +442,11 @@ class AudioSelector(ctk.CTk):
             main_app = VoxShareGUI(
                 input_device_index=self.input_device_index,
                 output_device_index=self.output_device_index,
-                user_config=config.get('user', {}), # <--- Added
+                user_config=config.get('user', {}), 
                 gui_config=self.gui_config,
                 net_config=config.get('network',{}),
                 audio_config=config.get('audio',{})
-            )
+                )
             # ****************************************************
             main_app.mainloop()
         except (ValueError, AttributeError, IndexError) as e: error_message = f"Selection error: {e}"; logging.warning(f"Device selection validation error: {e}"); self._update_error_label(error_message)
@@ -456,7 +457,7 @@ class VoxShareGUI(ctk.CTk):
     # *** CHANGE: Accepts user_config ***
     def __init__(self, input_device_index, output_device_index, user_config, gui_config, net_config, audio_config):
         super().__init__()
-        self.user_config = user_config # <--- Saving
+        self.user_config = user_config 
         self.gui_config = gui_config
         self.net_config = net_config
         self.audio_config = audio_config
@@ -477,10 +478,10 @@ class VoxShareGUI(ctk.CTk):
         try:
             # *** CHANGE: Passing user_config to AudioTransceiver ***
             self.audio_transceiver = AudioTransceiver(
-                user_config=self.user_config, # <--- Passing
+                user_config=self.user_config, 
                 net_config=self.net_config,
                 audio_config=self.audio_config
-            )
+                )
             # **********************************************************
         except RuntimeError as e: logging.exception("Critical error during AudioTransceiver initialization"); self.destroy(); return
         except Exception as e: logging.exception("Unexpected critical error during AudioTransceiver initialization"); self.destroy(); return
@@ -489,29 +490,29 @@ class VoxShareGUI(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         logging.info("Main VoxShareGUI window initialized.")
 
-    # --- setup_gui, start_threads, audio_input_thread, audio_output_thread (no changes) ---
+    # --- setup_gui, start_threads, audio_input_thread, audio_output_thread ---
     def setup_gui(self):
         """GUI configuration"""
         top_frame = ctk.CTkFrame(self, fg_color="transparent"); top_frame.pack(pady=10, padx=10, fill="x")
         ctk.CTkLabel(top_frame, text="VoxShare", font=("Arial", 24)).pack()
         middle_frame = ctk.CTkFrame(self, fg_color="transparent"); middle_frame.pack(pady=10, padx=10, fill="both", expand=True)
         try:
-            logo_path = resource_path(os.path.join("images", "logo.png"))
+            logo_path = resource_path(os.path.join("Icons", "logo.png"))
             img = Image.open(logo_path).resize((150, 150), Image.Resampling.LANCZOS)
             self.logo_img = ctk.CTkImage(light_image=img, dark_image=img, size=(150, 150))
             logo_widget = ctk.CTkLabel(middle_frame, image=self.logo_img, text=""); logging.debug("Logo logo.png loaded.")
         except FileNotFoundError: logging.warning("File logo.png not found."); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Logo]", width=150, height=150, fg_color="grey")
-        except Exception as e: logging.warning(f"Failed to load or process logo.png: {e}"); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Logo Error]", width=150, height=150, fg_color="grey")
+        except Exception as e: logging.warning(f"Failed to load or process logo.png: {e}"); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Logo error]", width=150, height=150, fg_color="grey")
         logo_widget.pack(side="left", padx=(0, 20), anchor="n")
         peer_list_frame = ctk.CTkFrame(middle_frame); peer_list_frame.pack(side="left", fill="both", expand=True)
-        ctk.CTkLabel(peer_list_frame, text="Participants:", font=("Arial", 14)).pack(anchor="w", padx=5)
+        ctk.CTkLabel(peer_list_frame, text="Peers:", font=("Arial", 14)).pack(anchor="w", padx=5)
         self.peer_list_textbox = ctk.CTkTextbox(peer_list_frame, font=("Arial", 12), wrap="none")
         self.peer_list_textbox.pack(side="top", fill="both", expand=True, padx=5, pady=(0,5)); self.peer_list_textbox.configure(state="disabled")
         bottom_frame = ctk.CTkFrame(self, fg_color="transparent"); bottom_frame.pack(side="bottom", pady=10, padx=10, fill="x")
         bottom_frame.columnconfigure(0, weight=1)
         self.led = ctk.CTkLabel(bottom_frame, text="", width=30, height=30, corner_radius=15, fg_color="#D50000"); self.led.grid(row=0, column=0, padx=10, pady=(5, 2))
         self.volume_bar = ctk.CTkProgressBar(bottom_frame, height=20); self.volume_bar.set(0); self.volume_bar.grid(row=1, column=0, padx=50, pady=2, sticky="ew")
-        self.talk_btn = ctk.CTkButton(bottom_frame, text="Talk", height=40, font=("Arial", 16)); self.talk_btn.grid(row=2, column=0, padx=50, pady=(5, 5), sticky="ew")
+        self.talk_btn = ctk.CTkButton(bottom_frame, text="Speak", height=40, font=("Arial", 16)); self.talk_btn.grid(row=2, column=0, padx=50, pady=(5, 5), sticky="ew")
         self.talk_btn.bind("<ButtonPress-1>", self.on_press); self.talk_btn.bind("<ButtonRelease-1>", self.on_release)
         self.bind("<KeyPress-space>", self.on_press); self.bind("<KeyRelease-space>", self.on_release)
         self.bind("<Button-1>", lambda event: self.focus_set())
@@ -542,9 +543,9 @@ class VoxShareGUI(ctk.CTk):
                     with self.volume_lock: self.volume = float(rms) * 2.5
                 except Exception as e: logging.exception(f"Error in audio_input callback during transmission")
             else:
-                if not self.is_pressing or self.audio_transceiver.shutdown_event.is_set():
-                    with self.volume_lock:
-                        self.volume = 0.0
+                 if not self.is_pressing or self.audio_transceiver.shutdown_event.is_set():
+                     with self.volume_lock:
+                         self.volume = 0.0
         try:
             logging.info(f"Opening InputStream: Device={self.input_device_index}, Rate={sample_rate}, Block={blocksize}, Dtype={dtype}")
             with sd.InputStream(samplerate=sample_rate, channels=channels, dtype=dtype, callback=callback, blocksize=blocksize, device=self.input_device_index):
@@ -577,7 +578,7 @@ class VoxShareGUI(ctk.CTk):
         except Exception as e: logging.exception(f"Critical audio output error (Other) Device={self.output_device_index}")
         logging.info("Audio output thread is shutting down.")
 
-    # --- receive_thread, ping_thread, client_cleanup_thread (no changes) ---
+    # --- receive_thread, ping_thread, client_cleanup_thread ---
     def receive_thread(self):
         if hasattr(self, 'audio_transceiver') and self.audio_transceiver: self.audio_transceiver.receive_packets()
         else: logging.error("ReceiveThread: audio_transceiver does not exist.")
@@ -591,14 +592,14 @@ class VoxShareGUI(ctk.CTk):
         logging.info("Ping sending thread is shutting down.")
 
     def client_cleanup_thread(self):
-        logging.info("Client cleanup thread started.")
-        if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: logging.error("ClientCleanupThread: audio_transceiver does not exist."); return
+        logging.info("Ping sending thread started.")
+        if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: logging.error("ClientCleanupThread: audio_transceiver не существует."); return
         cleanup_interval = 1.0
         while not self.audio_transceiver.shutdown_event.wait(timeout=cleanup_interval):
             self.audio_transceiver.cleanup_inactive_clients()
-        logging.info("Client cleanup thread is shutting down.")
+        logging.info("Ping sending thread is shutting down.")
 
-def update_gui(self):
+    def update_gui(self):
         """GUI update (called in the main thread)"""
         try:
             if not self.winfo_exists() or not hasattr(self, 'audio_transceiver') or not self.audio_transceiver: return
@@ -617,8 +618,8 @@ def update_gui(self):
                 with self.audio_transceiver.clients_lock:
                     active_peers_data = self.audio_transceiver.active_clients.copy()
             except AttributeError:
-                logging.warning("update_gui: audio_transceiver not found while accessing clients_lock.")
-                return
+                 logging.warning("update_gui: audio_transceiver not found while accessing clients_lock.")
+                 return
 
             # Determine the speaker and check for timeout/activity
             with self.speaker_lock:
@@ -627,40 +628,40 @@ def update_gui(self):
                     self.currently_speaking_ip = None
                 # Check if the speaker is still active (present in the dictionary)
                 if self.currently_speaking_ip and self.currently_speaking_ip not in active_peers_data:
-                    logging.debug(f"Speaker {self.currently_speaking_ip} is no longer in the list of active peers.")
-                    self.currently_speaking_ip = None
+                     logging.debug(f"Speaker {self.currently_speaking_ip} is no longer in the list of active peers.")
+                     self.currently_speaking_ip = None
                 current_speaker = self.currently_speaking_ip
 
             # Update the text box
             if hasattr(self, 'peer_list_textbox') and self.peer_list_textbox.winfo_exists():
                 try:
-                    self.peer_list_textbox.configure(state="normal")
-                    self.peer_list_textbox.delete("1.0", "end")
+                     self.peer_list_textbox.configure(state="normal")
+                     self.peer_list_textbox.delete("1.0", "end")
 
-                    # Sort IP addresses for stable display
-                    sorted_ips = sorted(active_peers_data.keys())
+                     # Sort IP addresses for stable display
+                     sorted_ips = sorted(active_peers_data.keys())
 
-                    if sorted_ips:
-                        for peer_ip in sorted_ips:
-                            info = active_peers_data.get(peer_ip, {})
-                            nickname = info.get('nickname', '')
-                            display_name = nickname if nickname else peer_ip # Use nickname if available, otherwise IP
-                            prefix = "* " if peer_ip == current_speaker else "  "
-                            self.peer_list_textbox.insert("end", f"{prefix}{display_name}\n")
-                    else:
-                        self.peer_list_textbox.insert("end", " (no other participants)")
+                     if sorted_ips:
+                         for peer_ip in sorted_ips:
+                             info = active_peers_data.get(peer_ip, {})
+                             nickname = info.get('nickname', '')
+                             display_name = nickname if nickname else peer_ip # Use nickname if available, otherwise IP
+                             prefix = "* " if peer_ip == current_speaker else "  "
+                             self.peer_list_textbox.insert("end", f"{prefix}{display_name}\n")
+                     else:
+                         self.peer_list_textbox.insert("end", " (no other peers)")
 
-                    self.peer_list_textbox.configure(state="disabled")
+                     self.peer_list_textbox.configure(state="disabled")
                 except tkinter.TclError as e:
-                    logging.warning(f"Error updating peer_list_textbox (widget might be destroyed): {e}")
+                     logging.warning(f"Error updating peer_list_textbox (widget might be destroyed): {e}")
             # ------------------------------------------------------
 
             # Schedule the next update
             if hasattr(self, 'audio_transceiver') and not self.audio_transceiver.shutdown_event.is_set():
-                self.after(100, self.update_gui)
+                 self.after(100, self.update_gui)
         except Exception as e: logging.exception("Unexpected error in update_gui")
 
-    # --- on_press, on_release, update_led, on_closing (no changes) ---
+    # --- on_press, on_release, update_led, on_closing ---
     def on_press(self, event=None):
         if not self.is_pressing:
             logging.info("Transmission started (button/space pressed)")
@@ -682,7 +683,7 @@ def update_gui(self):
 
     def update_led(self, on):
         color = "#00C853" if on else "#D50000"
-        if hasattr(self, 'led') and self.led.winfo_exists(): self.led.configure(fg_color=color); logging.debug(f"LED indicator set to {'ON' if on else 'OFF'}")
+        if hasattr(self, 'led') and self.led.winfo_exists(): self.led.configure(fg_color=color); logging.debug(f"LED индикатор установлен в {'ON' if on else 'OFF'}")
 
     def on_closing(self):
         """Window closing handler"""
@@ -690,8 +691,8 @@ def update_gui(self):
         if hasattr(self, 'audio_transceiver') and self.audio_transceiver: self.audio_transceiver.cleanup()
         logging.info("Destroying GUI window...")
         try:
-            self.unbind("<KeyPress-space>"); self.unbind("<KeyRelease-space>"); self.unbind("<Button-1>")
-            self.destroy()
+             self.unbind("<KeyPress-space>"); self.unbind("<KeyRelease-space>"); self.unbind("<Button-1>")
+             self.destroy()
         except Exception as e: logging.exception("Error during main window destruction")
         logging.info("Application finished.")
 
@@ -718,4 +719,4 @@ if __name__ == "__main__":
         selector.mainloop()
     except Exception as e: logging.exception("Critical unhandled error at the top level"); sys.exit(1)
     logging.info("="*20 + " Application finished normally " + "="*20)
-    print("Application finished.")        
+    print("Application finished.")     
