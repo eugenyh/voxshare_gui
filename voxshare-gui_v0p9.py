@@ -497,7 +497,7 @@ class VoxShareGUI(ctk.CTk):
         ctk.CTkLabel(top_frame, text="VoxShare", font=("Arial", 24)).pack()
         middle_frame = ctk.CTkFrame(self, fg_color="transparent"); middle_frame.pack(pady=10, padx=10, fill="both", expand=True)
         try:
-            logo_path = resource_path(os.path.join("Icons", "logo.png"))
+            logo_path = resource_path("Icons/logo.png")
             img = Image.open(logo_path).resize((150, 150), Image.Resampling.LANCZOS)
             self.logo_img = ctk.CTkImage(light_image=img, dark_image=img, size=(150, 150))
             logo_widget = ctk.CTkLabel(middle_frame, image=self.logo_img, text=""); logging.debug("Logo logo.png loaded.")
