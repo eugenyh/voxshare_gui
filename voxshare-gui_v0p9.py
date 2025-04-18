@@ -26,14 +26,13 @@ PACKET_TYPE_PING = b"PING" # Prefix remains 4 bytes
 # --- Additional constants ---
 SPEAKER_TIMEOUT_THRESHOLD = 0.3 # Seconds after which the "speaking" status is reset
 
+# --- Functions for gets the correct path for resources in EXE and in development ---
 def resource_path(relative_path):
-    """ Gets the correct path for resources in EXE and in development """
     if hasattr(sys, '_MEIPASS'):
         return os.path.join(sys._MEIPASS, relative_path)
     return os.path.join(os.path.abspath("."), relative_path)
 
 # --- Functions for working with settings and logging ---
-
 def get_default_config():
     """Returns a dictionary with default settings."""
     return {
@@ -69,7 +68,7 @@ def get_default_config():
         }
     }
 
-# --- load_config, setup_logging functions (no changes from original) ---
+# --- Load_config, setup_logging functions (no changes from original) ---
 def load_config(filename="config.json"):
     """Loads settings from a JSON file or creates a file with default settings."""
     global config
@@ -378,7 +377,6 @@ class AudioTransceiver:
                         # Log if the client was either removed already or became active again between checks
                         logging.debug(f"Client {ip} no longer candidate for removal or already removed.")
 
-
 # --- GUI Device Selection ---
 class AudioSelector(ctk.CTk):
     def __init__(self, gui_config):
@@ -535,7 +533,6 @@ class AudioSelector(ctk.CTk):
         except Exception as e:
             logging.exception("Unexpected error during validation and launch")
             self._update_error_label("A critical error occurred!")
-
 
 # --- Main Application GUI ---
 class VoxShareGUI(ctk.CTk):
@@ -1059,7 +1056,6 @@ class VoxShareGUI(ctk.CTk):
 
         logging.info("Application shutdown process completed.")
         # Note: Daemon threads will exit automatically when the main thread exits.
-
 
 # --- Entry point ---
 if __name__ == "__main__":
