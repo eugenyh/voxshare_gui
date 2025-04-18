@@ -513,8 +513,11 @@ class AudioSelector(ctk.CTk):
                  raise ValueError(f"Unexpected device check error: {e}")
 
             self._update_error_label("") # Clear errors if check passed
+            
+            
             self.destroy() # Close selector window
-
+            #self.close() # Close selector window
+            
             # Launch the main application window
             main_app = VoxShareGUI(
                 input_device_index=self.input_device_index,
