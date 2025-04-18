@@ -632,9 +632,9 @@ class VoxShareGUI(ctk.CTk):
         bottom_frame.pack(side="bottom", pady=10, padx=10, fill="x")
         bottom_frame.columnconfigure(0, weight=1) # Make the central column expandable
 
-        # LED indicator (aligned left)
+        # LED indicator (aligned center)
         self.led = ctk.CTkLabel(bottom_frame, text="", width=30, height=30, corner_radius=15, fg_color="#D50000")
-        self.led.grid(row=0, column=0, padx=10, pady=(5, 2), sticky="w") # Aligned left
+        self.led.grid(row=0, column=0, padx=10, pady=(5, 2), sticky="") # Aligned center
 
         # Volume bar (centered below LED)
         self.volume_bar = ctk.CTkProgressBar(bottom_frame, height=20, width=200) # Added width
