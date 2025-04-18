@@ -311,7 +311,7 @@ class AudioTransceiver:
         """Decodes an Opus packet into PCM"""
         try:
             pcm_data = self.decoder.decode(opus_packet, self.block_size)
-            logging.debug(f"Декодирован пакет {len(opus_packet)} байт -> {len(pcm_data)} байт PCM")
+            logging.debug(f"Decoded packet {len(opus_packet)} bytes -> {len(pcm_data)} bytes PCM")
             return pcm_data
         except opuslib.OpusError as e:
             logging.error(f"Error decoding Opus packet ({len(opus_packet)} bytes): {e}")
