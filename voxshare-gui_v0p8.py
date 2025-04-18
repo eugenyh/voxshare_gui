@@ -502,7 +502,7 @@ class VoxShareGUI(ctk.CTk):
             self.logo_img = ctk.CTkImage(light_image=img, dark_image=img, size=(150, 150))
             logo_widget = ctk.CTkLabel(middle_frame, image=self.logo_img, text=""); logging.debug("Logo logo.png loaded.")
         except FileNotFoundError: logging.warning("File logo.png not found."); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Logo]", width=150, height=150, fg_color="grey")
-        except Exception as e: logging.warning(f"Failed to load or process logo.png: {e}"); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Logo error]", width=150, height=150, fg_color="grey")
+        except Exception as e: logging.warning(f"Failed to load or process logo.png: {e}. logo_path ={logo_path}"); self.logo_img = None; logo_widget = ctk.CTkLabel(middle_frame, text="[Logo error]", width=150, height=150, fg_color="grey")
         logo_widget.pack(side="left", padx=(0, 20), anchor="n")
         peer_list_frame = ctk.CTkFrame(middle_frame); peer_list_frame.pack(side="left", fill="both", expand=True)
         ctk.CTkLabel(peer_list_frame, text="Peers:", font=("Arial", 14)).pack(anchor="w", padx=5)

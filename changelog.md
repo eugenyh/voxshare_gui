@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+
+## [0.9 Unreleased] - 2025-04-18
+
+### Fixed
+- Fixed incorrect log messages in the client cleanup thread (`ClientCleanupThread`) that mistakenly referenced "Ping sending thread".
+
+### Changed
+- **Volume indicator update refactoring:**
+    - Eliminated direct GUI state access (`self.volume`) from background thread (`audio_input_thread`)
+    - Implemented thread-safe queue (`queue.Queue`) for passing volume values from audio thread to main GUI thread
+    - `update_gui` method (main thread) now pulls values from queue to update `volume_bar` widget
+    - Removed related variables `self.volume` and `self.volume_lock`
+    - This change improves interface update stability and thread safety
+- Improved volume queue cleanup logic to prevent stale data during indicator updates
+- Enhanced inactive client check/removal logic in `cleanup_inactive_clients`
+- Improved shutdown sequence in `on_closing` for proper thread termination and resource cleanup
+
+### Added
+- Added handling for missing input/output audio devices in `AudioSelector` window
+- Added fallback colors for "Speak" button when theme colors are unavailable
+
 ---
 
 ## [0.8] – 2025-04-16
