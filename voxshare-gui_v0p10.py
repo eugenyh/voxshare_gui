@@ -684,9 +684,7 @@ class VoxShareGUI(ctk.CTk):
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
         top_frame.pack(pady=10, padx=10, fill="x")
 
-        ctk.CTkLabel(top_frame, text="VoxShare", font=("Arial", 24)).pack(side="left", padx=(10,0)) # Align left
-
-        # --- ADDED: Settings Button ---
+                # --- ADDED: Settings Button ---
         try:
             settings_icon_path = resource_path(os.path.join("Icons", "settings_icon.png")) # Need a gear icon (e.g., 24x24)
             img = Image.open(settings_icon_path).resize((24, 24), Image.Resampling.LANCZOS)
@@ -705,23 +703,30 @@ class VoxShareGUI(ctk.CTk):
         middle_frame = ctk.CTkFrame(self, fg_color="transparent")
         middle_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
-        # Logo (same as before)
+        # Создаем фрейм для логотипа и текста
+        logo_text_frame = ctk.CTkFrame(middle_frame, fg_color="transparent")
+        logo_text_frame.pack(side="left", padx=(0, 20), anchor="n")
+
+        # Logo
         logo_widget = None
         try:
             logo_path = resource_path(os.path.join("Icons", "logo.png"))
             img = Image.open(logo_path).resize((150, 150), Image.Resampling.LANCZOS)
             self.logo_img = ctk.CTkImage(light_image=img, dark_image=img, size=(150, 150))
-            logo_widget = ctk.CTkLabel(middle_frame, image=self.logo_img, text="")
+            logo_widget = ctk.CTkLabel(logo_text_frame, image=self.logo_img, text="")
             logging.debug(f"Logo loaded from {logo_path}")
         except FileNotFoundError:
             logging.warning("File logo.png not found.")
-            logo_widget = ctk.CTkLabel(middle_frame, text="[Logo]", width=150, height=150, fg_color="grey")
+            logo_widget = ctk.CTkLabel(logo_text_frame, text="[Logo]", width=150, height=150, fg_color="grey")
         except Exception as e:
             logging.warning(f"Failed to load or process logo.png: {e}.")
-            logo_widget = ctk.CTkLabel(middle_frame, text="[Logo Error]", width=150, height=150, fg_color="grey")
+            logo_widget = ctk.CTkLabel(logo_text_frame, text="[Logo Error]", width=150, height=150, fg_color="grey")
         if logo_widget:
-            logo_widget.pack(side="left", padx=(0, 20), anchor="n")
+            logo_widget.pack()
 
+        # Текст под логотипом
+        ctk.CTkLabel(logo_text_frame, text="VoxShare", font=("Arial", 24)).pack(pady=(10, 0))
+        
         # Peer List (same as before)
         peer_list_frame = ctk.CTkFrame(middle_frame)
         peer_list_frame.pack(side="left", fill="both", expand=True)
