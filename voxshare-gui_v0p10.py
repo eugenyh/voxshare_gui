@@ -275,6 +275,8 @@ class AudioTransceiver:
         except Exception as e: logging.exception(f"Unexpected error during audio encoding/sending")
 
     def send_ping(self):
+        logging.debug(f"[DEBUG] send_ping called")
+        
         """Sending a ping packet with the nickname"""
         if self.shutdown_event.is_set(): return
         try:
@@ -774,9 +776,9 @@ class VoxShareGUI(ctk.CTk):
             logging.info("Starting worker threads...")
             self.input_thread = threading.Thread(target=self.audio_input_thread, name="AudioInputThread", daemon=True)
             self.output_thread = threading.Thread(target=self.audio_output_thread, name="AudioOutputThread", daemon=True)
-            self.receive_thread = threading.Thread(target=self.receive_thread, name="ReceiveThread", daemon=True)
-            self.ping_thread = threading.Thread(target=self.ping_thread, name="PingThread", daemon=True)
-            self.cleanup_thread = threading.Thread(target=self.client_cleanup_thread, name="ClientCleanupThread", daemon=True)
+            self.receive_thread = threading.Thread(target=self.receive_thread_func, name="ReceiveThread", daemon=True)
+            self.ping_thread = threading.Thread(target=self.ping_thread_func, name="PingThread", daemon=True)
+            self.cleanup_thread = threading.Thread(target=self.client_cleanup_thread_func, name="ClientCleanupThread", daemon=True)
 
             self.input_thread.start()
             self.output_thread.start()
@@ -977,13 +979,13 @@ class VoxShareGUI(ctk.CTk):
         except Exception as e: logging.exception(f"Critical audio output error (Other) Device={current_output_device}")
         logging.info("Audio output thread finished.")
 
-    def receive_thread(self):
+    def receive_thread_func(self):
         """Wrapper for packet receiving"""
         if hasattr(self, 'audio_transceiver') and self.audio_transceiver:
             self.audio_transceiver.receive_packets()
         else: logging.error("ReceiveThread: audio_transceiver does not exist or already cleaned up.")
 
-    def ping_thread(self):
+    def ping_thread_func(self):
         """Periodically sends ping packets"""
         logging.info("Ping sending thread starting.")
         # Wait until transceiver is ready
@@ -1004,7 +1006,7 @@ class VoxShareGUI(ctk.CTk):
                  break # Exit loop if transceiver is gone
         logging.info("Ping sending thread finished.")
 
-    def client_cleanup_thread(self):
+    def client_cleanup_thread_func(self):
         """Periodically cleans up inactive clients"""
         logging.info("Client cleanup thread starting.")
         # Wait until transceiver is ready
