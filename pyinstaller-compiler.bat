@@ -21,7 +21,7 @@ if not exist "%PYTHON_SCRIPT%" (
 
 :: Compilation with pyinstaller
 echo Compile %PYTHON_SCRIPT% with pyinstaller...
-pyinstaller --onefile --noconsole --icon=Icons/logo.ico --add-data "Icons/logo.png;Icons" --hidden-import=customtkinter  "%PYTHON_SCRIPT%"
+pyinstaller --onefile --noconsole --icon=Icons/logo.ico --add-data="Icons/logo.png;Icons" --add-data="Icons/settings_icon.png;Icons" --hidden-import=customtkinter  "%PYTHON_SCRIPT%"
 
 :: Checking for result
 if errorlevel 1 (
