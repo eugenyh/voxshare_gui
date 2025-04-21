@@ -8,8 +8,8 @@
 
 Check out the [changelog.md](changelog.md) for a detailed list of features, bug fixes, and improvements by version.
 
-Latest version: **v0.8**  
-Release date: **2025-04-16**
+Latest version: **v0.10**  
+Release date: **2025-04-21**
 
 ## 🎧 Features
 
