@@ -47,3 +47,6 @@ nuitka-dist/
 
 #pyinstaller
 *.spec
+
+#text
+*.txt
