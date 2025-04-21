@@ -56,6 +56,9 @@ All notable changes to this project will be documented in this file.
 
 - **Handling of Incomplete Config File:** Improved the logic in `load_config` for merging loaded settings with defaults. This prevents `KeyError` exceptions if a user manually deleted sections or keys from `config.json` (e.g., `"audio"` or `"input_device_index"`). It now ensures essential keys are always present in the `config` dictionary after loading.
 
+- **Fixed thread startup issue** where methods `ping_thread`, `receive_thread`, and `client_cleanup_thread` were unintentionally shadowed by `Thread` objects with the same names. This prevented pings, peer updates, and cleanup tasks from working properly.  
+    - Renamed these methods to `ping_thread_func`, `receive_thread_func`, and `client_cleanup_thread_func` to avoid name collisions and ensure correct thread behavior.
+
 ---
 
 ## [0.9 Unreleased] - 2025-04-18
