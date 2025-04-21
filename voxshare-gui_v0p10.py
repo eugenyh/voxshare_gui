@@ -774,8 +774,8 @@ class VoxShareGUI(ctk.CTk):
             )
             # Start threads
             logging.info("Starting worker threads...")
-            self.input_thread = threading.Thread(target=self.audio_input_thread, name="AudioInputThread", daemon=True)
-            self.output_thread = threading.Thread(target=self.audio_output_thread, name="AudioOutputThread", daemon=True)
+            self.input_thread = threading.Thread(target=self.audio_input_thread_func, name="AudioInputThread", daemon=True)
+            self.output_thread = threading.Thread(target=self.audio_output_thread_func, name="AudioOutputThread", daemon=True)
             self.receive_thread = threading.Thread(target=self.receive_thread_func, name="ReceiveThread", daemon=True)
             self.ping_thread = threading.Thread(target=self.ping_thread_func, name="PingThread", daemon=True)
             self.cleanup_thread = threading.Thread(target=self.client_cleanup_thread_func, name="ClientCleanupThread", daemon=True)
@@ -885,7 +885,7 @@ class VoxShareGUI(ctk.CTk):
     # They don't need fundamental changes, just ensure they use instance variables correctly.
     # Copying them from previous version for completeness.
 
-    def audio_input_thread(self):
+    def audio_input_thread_func(self):
         """Thread for capturing audio, encoding, and sending"""
         # Check if transceiver exists and has necessary attributes
         if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver or not hasattr(self.audio_transceiver, 'shutdown_event'):
@@ -935,7 +935,7 @@ class VoxShareGUI(ctk.CTk):
         except Exception as e: logging.exception(f"Critical audio input error (Other) Device={current_input_device}")
         logging.info("Audio input thread finished.")
 
-    def audio_output_thread(self):
+    def audio_output_thread_func(self):
         """Thread for receiving decoded audio and playing it"""
         if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver or not hasattr(self.audio_transceiver, 'shutdown_event'):
             logging.error("AudioOutputThread cannot start: audio_transceiver not ready.")
