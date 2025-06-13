@@ -59,9 +59,9 @@ def get_default_config():
             "client_timeout_sec": 5
         },
         "audio": {
-            "sample_rate": 16000,
+            "sample_rate": 48000,
             "channels": 1,
-            "block_size": 320,
+            "block_size": 960,
             "dtype": "int16",
             "opus_application": "voip",
             "playback_queue_size": 20,
