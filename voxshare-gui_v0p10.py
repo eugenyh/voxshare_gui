@@ -196,9 +196,9 @@ class AudioTransceiver:
         self.port = self.net_config.get('port', 5005)
         self.ttl = self.net_config.get('ttl', 1)
         self.socket_buffer_size = self.net_config.get('socket_buffer_size', 65536)
-        self.sample_rate = self.audio_config.get('sample_rate', 48000)
+        self.sample_rate = self.audio_config.get('sample_rate', 16000)
         self.channels = self.audio_config.get('channels', 1)
-        self.block_size = self.audio_config.get('block_size', 960)
+        self.block_size = self.audio_config.get('block_size', 320)
         self.dtype = self.audio_config.get('dtype', 'int16')
         opus_app_str = self.audio_config.get('opus_application', 'voip')
         self.opus_application = OPUS_APPLICATION_MAP.get(opus_app_str, opuslib.APPLICATION_VOIP)
@@ -291,6 +291,7 @@ class AudioTransceiver:
 
     def receive_packets(self):
         """Receiving packets in a loop"""
+        
         logging.info("Packet receiving thread started.")
         while not self.shutdown_event.is_set():
             try:

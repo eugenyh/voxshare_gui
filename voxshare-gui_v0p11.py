@@ -59,16 +59,14 @@ def get_default_config():
             "client_timeout_sec": 5
         },
         "audio": {
-            "sample_rate": 48000,
+            "sample_rate": 16000,
             "channels": 1,
-            "block_size": 960,
+            "block_size": 320,
             "dtype": "int16",
             "opus_application": "voip",
             "playback_queue_size": 20,
-            # --- ADDED: Default device indices ---
             "input_device_index": INVALID_DEVICE_INDEX,
             "output_device_index": INVALID_DEVICE_INDEX
-            # -------------------------------------
         },
         "logging": {
             "enabled": True,
@@ -85,20 +83,17 @@ def load_config(filename=CONFIG_FILENAME):
     try:
         with open(filename, 'r', encoding='utf-8') as f:
             loaded_config = json.load(f)
-            # --- Recursive update to merge defaults with loaded config ---
             def update_recursive(d, u):
                 for k, v in u.items():
                     if isinstance(v, dict):
-                        # Get the default dictionary for the key if it exists
                         r = d.get(k, {})
                         if isinstance(r, dict):
                            d[k] = update_recursive(r, v)
-                        else: # Loaded value replaces non-dict default
+                        else:
                             d[k] = v
                     else:
                         d[k] = v
                 return d
-            # Start update from defaults to ensure all keys exist
             config = update_recursive(defaults, loaded_config)
             logging.info(f"Settings loaded and merged with defaults from {filename}")
             print(f"Settings loaded from {filename}")
@@ -107,7 +102,7 @@ def load_config(filename=CONFIG_FILENAME):
         print(f"Settings file {filename} not found. Creating a file with default settings.")
         logging.warning(f"Settings file {filename} not found. Creating default config.")
         config = defaults
-        save_config(config, filename) # Save the defaults immediately
+        save_config(config, filename)
     except json.JSONDecodeError as e:
         print(f"Error: Could not decode JSON in file {filename}: {e}. Using default settings.")
         logging.error(f"Error decoding JSON in {filename}: {e}. Using defaults.")
@@ -116,13 +111,10 @@ def load_config(filename=CONFIG_FILENAME):
         print(f"Unexpected error while loading settings: {e}. Using default settings.")
         logging.exception(f"Unexpected error loading settings from {filename}. Using defaults.")
         config = defaults
-    # Ensure essential keys exist even after loading potentially incomplete file
     if 'audio' not in config: config['audio'] = defaults['audio']
     if 'input_device_index' not in config['audio']: config['audio']['input_device_index'] = defaults['audio']['input_device_index']
     if 'output_device_index' not in config['audio']: config['audio']['output_device_index'] = defaults['audio']['output_device_index']
 
-
-# --- ADDED: Function to save configuration ---
 def save_config(config_to_save, filename=CONFIG_FILENAME):
     """Saves the current configuration dictionary to a JSON file."""
     try:
@@ -138,11 +130,9 @@ def save_config(config_to_save, filename=CONFIG_FILENAME):
         print(f"Unexpected error while saving settings: {e}")
         logging.exception(f"Unexpected error saving settings to {filename}")
         return False
-# --------------------------------------------
 
 def setup_logging():
     """Configures the logging system based on the configuration."""
-    # (No changes needed in setup_logging itself)
     log_config = config.get('logging', {})
     enabled = log_config.get('enabled', False)
     if not enabled:
@@ -154,11 +144,10 @@ def setup_logging():
     log_format = log_config.get('log_format', '%(asctime)s - %(levelname)s - %(threadName)s - %(message)s')
     log_level_map = {'DEBUG': logging.DEBUG, 'INFO': logging.INFO, 'WARNING': logging.WARNING, 'ERROR': logging.ERROR, 'CRITICAL': logging.CRITICAL}
     log_level = log_level_map.get(log_level_str, logging.INFO)
-    # Remove existing handlers before basicConfig
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
     try:
-        logging.basicConfig(level=log_level, format=log_format, filename=log_file, filemode='w', encoding='utf-8', force=True) # force=True overrides existing handlers if any survived
+        logging.basicConfig(level=log_level, format=log_format, filename=log_file, filemode='w', encoding='utf-8', force=True)
         logging.info("="*20 + " Application Start " + "="*20)
         logging.info(f"Logging configured. Level: {log_level_str}, File: {log_file}")
         print(f"Logging configured. Level: {log_level_str}, File: {log_file}")
@@ -172,9 +161,71 @@ def setup_logging():
 # --- Mapping strings from config to Opus constants ---
 OPUS_APPLICATION_MAP = { "voip": opuslib.APPLICATION_VOIP, "audio": opuslib.APPLICATION_AUDIO, "restricted_lowdelay": opuslib.APPLICATION_RESTRICTED_LOWDELAY }
 
-# --- Class for working with network and Opus ---
-# (AudioTransceiver class remains largely unchanged internally,
-# it receives config during init)
+class AudioMixer:
+    def __init__(self, sample_rate, channels, block_size, dtype):
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.block_size = block_size
+        self.dtype = dtype
+        self.audio_buffers = {}  # {ip: np.array}
+        self.last_activity = {}  # {ip: timestamp}
+        self.lock = threading.Lock()
+        self.silence_threshold = 0.01  # Порог для определения тишины
+        self.max_inactive_time = 0.5  # Макс время неактивности перед очисткой (сек)
+        
+    def add_audio(self, ip, audio_data):
+        """Add audio data from a specific IP to the mixer"""
+        with self.lock:
+            # Проверяем, не является ли пакет тишиной
+            if np.max(np.abs(audio_data)) > self.silence_threshold:
+                self.audio_buffers[ip] = audio_data
+                self.last_activity[ip] = time.time()
+            else:
+                # Если это тишина, удаляем буфер для этого IP
+                if ip in self.audio_buffers:
+                    del self.audio_buffers[ip]
+    
+    def mix_audio(self):
+        """Mix all audio buffers with normalization"""
+        with self.lock:
+            current_time = time.time()
+            
+            # Сначала очистим неактивные буферы
+            to_remove = [ip for ip, ts in self.last_activity.items() 
+                        if current_time - ts > self.max_inactive_time]
+            for ip in to_remove:
+                if ip in self.audio_buffers:
+                    del self.audio_buffers[ip]
+                if ip in self.last_activity:
+                    del self.last_activity[ip]
+            
+            if not self.audio_buffers:
+                return np.zeros(self.block_size * self.channels, dtype=self.dtype)
+            
+            mixed = np.zeros(self.block_size * self.channels, dtype=self.dtype)
+            active_sources = 0
+            
+            for data in self.audio_buffers.values():
+                if len(data) == len(mixed):
+                    mixed += data
+                    active_sources += 1
+            
+            # Нормализуем только если есть активные источники
+            if active_sources > 0:
+                if active_sources > 1:
+                    mixed = mixed / active_sources
+                return mixed
+            else:
+                return np.zeros(self.block_size * self.channels, dtype=self.dtype)    
+                
+    def cleanup_inactive(self, active_ips):
+        """Remove buffers for inactive IPs"""
+        with self.lock:
+            inactive_ips = set(self.audio_buffers.keys()) - set(active_ips)
+            for ip in inactive_ips:
+                if ip in self.audio_buffers:
+                    del self.audio_buffers[ip]
+
 class AudioTransceiver:
     def __init__(self, user_config, net_config, audio_config):
         self.user_config = user_config
@@ -196,14 +247,23 @@ class AudioTransceiver:
         self.port = self.net_config.get('port', 5005)
         self.ttl = self.net_config.get('ttl', 1)
         self.socket_buffer_size = self.net_config.get('socket_buffer_size', 65536)
-        self.sample_rate = self.audio_config.get('sample_rate', 48000)
+        self.sample_rate = self.audio_config.get('sample_rate', 16000)
         self.channels = self.audio_config.get('channels', 1)
-        self.block_size = self.audio_config.get('block_size', 960)
+        self.block_size = self.audio_config.get('block_size', 320)
         self.dtype = self.audio_config.get('dtype', 'int16')
         opus_app_str = self.audio_config.get('opus_application', 'voip')
         self.opus_application = OPUS_APPLICATION_MAP.get(opus_app_str, opuslib.APPLICATION_VOIP)
         self.packet_type_audio = PACKET_TYPE_AUDIO
         self.packet_type_ping = PACKET_TYPE_PING
+        
+        # Initialize audio mixer
+        self.mixer = AudioMixer(
+            sample_rate=self.sample_rate,
+            channels=self.channels,
+            block_size=self.block_size,
+            dtype=self.dtype
+        )
+        
         try:
             self.encoder = opuslib.Encoder(self.sample_rate, self.channels, self.opus_application)
             self.decoder = opuslib.Decoder(self.sample_rate, self.channels)
@@ -243,12 +303,10 @@ class AudioTransceiver:
         """Cleanup resources"""
         logging.info("Starting AudioTransceiver resource cleanup...")
         self.shutdown_event.set()
-        # No sleep here, let joining threads handle waiting if needed
         if hasattr(self, 'sock_send'):
             try: self.sock_send.close(); logging.info("Send socket closed.")
             except Exception as e: logging.error(f"Error closing send socket: {e}")
         if hasattr(self, 'sock_recv'):
-            # Attempt to leave group first
             try:
                 mreq = struct.pack("4sl", socket.inet_aton(self.mcast_grp), socket.INADDR_ANY)
                 self.sock_recv.setsockopt(socket.IPPROTO_IP, socket.IP_DROP_MEMBERSHIP, mreq)
@@ -256,13 +314,9 @@ class AudioTransceiver:
             except socket.error as e: logging.warning(f"Failed to leave multicast group (socket may already be closed): {e}")
             except AttributeError: logging.warning("Multicast group leave skipped (socket likely already closed/invalid).")
             except Exception as e: logging.error(f"Error attempting to leave multicast group: {e}")
-            # Then close the socket
             try: self.sock_recv.close(); logging.info("Receive socket closed.")
             except Exception as e: logging.error(f"Error closing receive socket: {e}")
-        logging.info("AudioTransceiver cleanup finished.") # Changed message slightly
-
-    # encode_and_send_audio, send_ping, receive_packets, decode_audio, get_decoded_audio_packet, cleanup_inactive_clients
-    # methods remain unchanged from previous version. Copying them for completeness.
+        logging.info("AudioTransceiver cleanup finished.")
 
     def encode_and_send_audio(self, pcm_data_bytes):
         """Encoding PCM data to Opus and sending"""
@@ -276,7 +330,6 @@ class AudioTransceiver:
 
     def send_ping(self):
         logging.debug(f"[DEBUG] send_ping called")
-        
         """Sending a ping packet with the nickname"""
         if self.shutdown_event.is_set(): return
         try:
@@ -294,15 +347,12 @@ class AudioTransceiver:
         logging.info("Packet receiving thread started.")
         while not self.shutdown_event.is_set():
             try:
-                # Set a timeout for recvfrom to allow checking shutdown_event periodically
                 self.sock_recv.settimeout(0.5)
                 data, addr = self.sock_recv.recvfrom(self.socket_buffer_size)
                 logging.debug(f"Received packet {len(data)} bytes from {addr}")
 
-                # Ignore packets from self
                 if addr[0] == self.local_ip: continue
 
-                # Audio packet
                 if data.startswith(self.packet_type_audio):
                     opus_packet = data[len(self.packet_type_audio):]
                     packet_tuple = (addr[0], opus_packet)
@@ -311,51 +361,44 @@ class AudioTransceiver:
                         logging.debug(f"Audio packet ({len(opus_packet)} bytes from {addr[0]}) added to queue.")
                     except queue.Full:
                         try:
-                            # Drop oldest packet if queue is full
                             dropped_tuple = self.received_opus_packets.get_nowait()
                             self.received_opus_packets.put_nowait(packet_tuple)
                             logging.warning(f"Audio packet queue full. Dropped packet from {dropped_tuple[0]}. Added new from {addr[0]}.")
-                        except queue.Empty: pass # Should not happen here
+                        except queue.Empty: pass
                         except queue.Full: logging.warning("Queue is full even after removal, new audio packet skipped.")
 
-                # Ping packet
                 elif data.startswith(self.packet_type_ping):
                     nickname_bytes = data[len(self.packet_type_ping):]
                     try:
                         nickname = nickname_bytes.decode('utf-8', errors='replace').strip()
                     except Exception as e:
                         logging.warning(f"Failed to decode nickname from PING from {addr[0]}: {e}")
-                        nickname = "" # Use empty nick on error
+                        nickname = ""
 
                     with self.clients_lock:
-                        # Update or create client record
                         client_info = self.active_clients.get(addr[0], {})
                         client_info['last_seen'] = time.time()
-                        client_info['nickname'] = nickname # Save/update nick
+                        client_info['nickname'] = nickname
                         self.active_clients[addr[0]] = client_info
                     logging.info(f"Received PING from {addr[0]} (Nick: '{nickname}'). Client active.")
 
-                # Unknown packet
                 else:
                     logging.warning(f"Received unknown packet type from {addr}: {data[:10]}...")
 
             except socket.timeout:
-                 continue # Normal, allows checking shutdown_event
+                 continue
             except socket.error as e:
                  if self.shutdown_event.is_set():
                      logging.info("Socket closed (expected during shutdown), receiving thread terminating.")
                      break
                  else:
-                     # Log non-shutdown errors
                      logging.error(f"Socket error while receiving packet: {e}")
-                     time.sleep(0.1) # Avoid busy-looping on persistent errors
+                     time.sleep(0.1)
             except Exception as e:
-                  # Log unexpected errors
                   if not self.shutdown_event.is_set():
                       logging.exception("Unexpected error in receive_packets")
 
         logging.info("Packet reception thread finished.")
-
 
     def decode_audio(self, opus_packet):
         """Decodes an Opus packet into PCM"""
@@ -382,11 +425,11 @@ class AudioTransceiver:
                      return sender_ip, audio_data
                  else:
                      logging.warning(f"Unexpected size of decoded packet from {sender_ip} ({audio_data.size} instead of {expected_size})")
-                     return None # Treat size mismatch as error
+                     return None
             else:
-                 return None # Decoding failed
+                 return None
         except queue.Empty:
-            return None # No packets available
+            return None
         except Exception as e:
             logging.exception("Unexpected error in get_decoded_audio_packet")
             return None
@@ -397,19 +440,17 @@ class AudioTransceiver:
         inactive_ips = []
         client_timeout = self.net_config.get('client_timeout_sec', 5)
 
-        # Use a copy of keys for safe iteration while checking
         with self.clients_lock:
             all_client_ips = list(self.active_clients.keys())
 
         for ip in all_client_ips:
             last_seen = None
             with self.clients_lock:
-                # Re-check if client still exists before getting last_seen
                 client_info = self.active_clients.get(ip)
                 if client_info:
                     last_seen = client_info.get('last_seen')
 
-            if last_seen is None: continue # Client might have been removed concurrently
+            if last_seen is None: continue
 
             if current_time - last_seen > client_timeout:
                 inactive_ips.append(ip)
@@ -419,23 +460,19 @@ class AudioTransceiver:
             with self.clients_lock:
                 removed_count = 0
                 for ip in inactive_ips:
-                    # Double-check timeout condition before removing inside the lock
                     client_info = self.active_clients.get(ip)
                     if client_info and current_time - client_info.get('last_seen', 0) > client_timeout:
                         nickname = client_info.get('nickname', '')
                         logging.info(f"Removing inactive client: {ip} (Nickname: '{nickname}', last seen: {current_time - client_info.get('last_seen', 0):.1f}s ago)")
                         del self.active_clients[ip]
                         removed_count += 1
-                    # No need for else, if condition fails, it stays
                 if removed_count > 0:
                      logging.debug(f"Removed {removed_count} inactive clients.")
 
-
-# --- MODIFIED: GUI Device Selection ---
-class AudioSelector(ctk.CTkToplevel): # Changed to Toplevel for modal behavior
+class AudioSelector(ctk.CTkToplevel):
     def __init__(self, current_config, master=None):
         super().__init__(master)
-        self.config = current_config # Store reference to the main config dict
+        self.config = current_config
         self.audio_config = self.config.get('audio', {})
         self.gui_config = self.config.get('gui', {})
 
@@ -448,19 +485,16 @@ class AudioSelector(ctk.CTkToplevel): # Changed to Toplevel for modal behavior
             self.geometry("500x350")
 
         self.resizable(False, False)
-        # Make it modal
-        self.grab_set() # Prevent interaction with the master window (if any)
-        self.focus_set() # Focus this window
-        self.protocol("WM_DELETE_WINDOW", self._on_closing) # Handle closing via 'X'
+        self.grab_set()
+        self.focus_set()
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
 
-        # Store results
         self.selected_input_index = INVALID_DEVICE_INDEX
         self.selected_output_index = INVALID_DEVICE_INDEX
         self.selection_successful = False
 
         self.create_widgets()
-        self.populate_devices() # Populate and try to pre-select
-
+        self.populate_devices()
 
     def _on_closing(self):
         """Handle window close button press."""
@@ -479,7 +513,7 @@ class AudioSelector(ctk.CTkToplevel): # Changed to Toplevel for modal behavior
 
         self.continue_button = ctk.CTkButton(self, text="Confirm Selection", command=self.validate_save_and_close)
         self.continue_button.pack(pady=30)
-        self.continue_button.configure(state="disabled") # Disabled until devices loaded
+        self.continue_button.configure(state="disabled")
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="red", font=("Arial", 12))
         self.error_label.pack(pady=(0, 10))
@@ -489,40 +523,34 @@ class AudioSelector(ctk.CTkToplevel): # Changed to Toplevel for modal behavior
         input_devices = self.get_device_list(input=True)
         output_devices = self.get_device_list(output=True)
 
-        # Update input combobox
         if input_devices:
             self.input_combo.configure(values=input_devices, state="readonly")
-            # Try to pre-select based on config
             saved_input_idx = self.audio_config.get('input_device_index', INVALID_DEVICE_INDEX)
             preselect_input = self.find_device_name_by_index(input_devices, saved_input_idx)
             if preselect_input:
                 self.input_combo.set(preselect_input)
             else:
-                 self.input_combo.set(input_devices[0]) # Default to first if not found or not saved
+                 self.input_combo.set(input_devices[0])
         else:
             self.input_combo.configure(values=["No input devices found"], state="disabled")
             self.input_combo.set("No input devices found")
 
-        # Update output combobox
         if output_devices:
             self.output_combo.configure(values=output_devices, state="readonly")
-            # Try to pre-select based on config
             saved_output_idx = self.audio_config.get('output_device_index', INVALID_DEVICE_INDEX)
             preselect_output = self.find_device_name_by_index(output_devices, saved_output_idx)
             if preselect_output:
                  self.output_combo.set(preselect_output)
             else:
-                 self.output_combo.set(output_devices[0]) # Default to first
+                 self.output_combo.set(output_devices[0])
         else:
              self.output_combo.configure(values=["No output devices found"], state="disabled")
              self.output_combo.set("No output devices found")
 
-        # Enable button only if both lists have devices
         if input_devices and output_devices:
             self.continue_button.configure(state="normal")
         else:
             self._update_error_label("Cannot continue: Missing input or output devices.")
-
 
     def find_device_name_by_index(self, device_list, index_to_find):
         """Helper to find the device string like 'index: name'."""
@@ -547,7 +575,6 @@ class AudioSelector(ctk.CTkToplevel): # Changed to Toplevel for modal behavior
                 is_output = dev.get('max_output_channels', 0) > 0
                 if (input and is_input) or (output and is_output):
                      try:
-                         # Format: "index: device_name"
                          device_name_str = f"{i}: {dev['name']}"
                          devices_found.append(device_name_str)
                      except Exception as enc_e:
@@ -578,13 +605,11 @@ class AudioSelector(ctk.CTkToplevel): # Changed to Toplevel for modal behavior
             if ":" not in input_selection or ":" not in output_selection:
                  raise ValueError("Incorrect format of the selected device.")
 
-            # --- Extract Indices ---
             current_input_index = int(input_selection.split(":")[0])
             current_output_index = int(output_selection.split(":")[0])
             logging.info(f"Selected devices: Input={current_input_index} ('{input_selection}'), Output={current_output_index} ('{output_selection}')")
 
-            # --- Validate Device Compatibility ---
-            rate = self.audio_config.get('sample_rate', 48000)
+            rate = self.audio_config.get('sample_rate', 16000)
             chans = self.audio_config.get('channels', 1)
             dtype = self.audio_config.get('dtype', 'int16')
             try:
@@ -603,47 +628,39 @@ class AudioSelector(ctk.CTkToplevel): # Changed to Toplevel for modal behavior
                  logging.exception("Unexpected sounddevice settings check error")
                  raise ValueError(f"Device check error: {e}")
 
-            # --- If validation successful, update config and save ---
             self.config['audio']['input_device_index'] = current_input_index
             self.config['audio']['output_device_index'] = current_output_index
             if save_config(self.config):
                 logging.info("Selected device indices saved to configuration.")
-                # Set internal state for the caller
                 self.selected_input_index = current_input_index
                 self.selected_output_index = current_output_index
                 self.selection_successful = True
-                self.destroy() # Close the selector window
+                self.destroy()
             else:
-                # Handle save failure
                  raise ValueError("Failed to save the configuration file.")
 
         except (ValueError, AttributeError, IndexError, TypeError) as e:
             error_message = f"Selection error: {e}"
             logging.warning(f"Device selection validation error: {e}")
             self._update_error_label(error_message)
-            self.selection_successful = False # Ensure flag is false on error
+            self.selection_successful = False
         except Exception as e:
             logging.exception("Unexpected error during validation and save")
             self._update_error_label("A critical error occurred!")
             self.selection_successful = False
 
-
-# --- MODIFIED: Main Application GUI ---
 class VoxShareGUI(ctk.CTk):
-    # Takes the whole config object now
     def __init__(self, app_config):
         super().__init__()
-        global config # Use the global config state
-        config = app_config # Update global config if needed (though should be same obj)
+        global config
+        config = app_config
         self.user_config = config.get('user', {})
         self.gui_config = config.get('gui', {})
         self.net_config = config.get('network', {})
         self.audio_config = config.get('audio', {})
 
-        # --- Get device indices from config ---
         self.input_device_index = self.audio_config.get('input_device_index', INVALID_DEVICE_INDEX)
         self.output_device_index = self.audio_config.get('output_device_index', INVALID_DEVICE_INDEX)
-        # Basic check - should have been validated before launching GUI
         if self.input_device_index == INVALID_DEVICE_INDEX or self.output_device_index == INVALID_DEVICE_INDEX:
              logging.critical("VoxShareGUI launched with invalid device indices in config!")
              messagebox.showerror("Configuration Error", "Application started with invalid audio device settings.")
@@ -656,7 +673,6 @@ class VoxShareGUI(ctk.CTk):
         except Exception as e: logging.warning(f"Incorrect geometry ('{geometry}'): {e}. Using 550x450."); self.geometry("550x450")
         self.resizable(False, False)
 
-        # --- State Variables ---
         self.is_pressing = False
         self.volume_queue = queue.Queue(maxsize=5)
         self.currently_speaking_ip = None
@@ -668,13 +684,10 @@ class VoxShareGUI(ctk.CTk):
         self.receive_thread = None
         self.ping_thread = None
         self.cleanup_thread = None
-        # --- END State Variables ---
 
         self.setup_gui()
-        if not self.setup_audio_subsystem(): # Try to setup audio
-             # Handle failure to setup audio (e.g., show error, disable audio features)
+        if not self.setup_audio_subsystem():
              messagebox.showerror("Audio Error", "Failed to initialize audio system. Check logs.")
-             # Decide how to proceed - maybe disable audio buttons? For now, log and continue.
              logging.critical("Failed to setup audio subsystem during GUI init.")
 
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -682,13 +695,12 @@ class VoxShareGUI(ctk.CTk):
         self.after(100, lambda: self.focus_force())
 
     def setup_gui(self):
-        """GUI configuration - Added Settings Button"""
+        """GUI configuration"""
         top_frame = ctk.CTkFrame(self, fg_color="transparent")
         top_frame.pack(pady=10, padx=10, fill="x")
 
-                # --- ADDED: Settings Button ---
         try:
-            settings_icon_path = resource_path(os.path.join("Icons", "settings_icon.png")) # Need a gear icon (e.g., 24x24)
+            settings_icon_path = resource_path(os.path.join("Icons", "settings_icon.png"))
             img = Image.open(settings_icon_path).resize((24, 24), Image.Resampling.LANCZOS)
             self.settings_icon = ctk.CTkImage(light_image=img, dark_image=img, size=(24, 24))
             settings_button = ctk.CTkButton(top_frame, image=self.settings_icon, text="", width=30, command=self.open_audio_settings)
@@ -700,16 +712,13 @@ class VoxShareGUI(ctk.CTk):
             logging.warning(f"Failed to load settings_icon.png: {e}. Using text button.")
             settings_button = ctk.CTkButton(top_frame, text="Settings", width=60, command=self.open_audio_settings)
         settings_button.pack(side="right", padx=(0, 10))
-        # --- END Settings Button ---
 
         middle_frame = ctk.CTkFrame(self, fg_color="transparent")
         middle_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
-        # Создаем фрейм для логотипа и текста
         logo_text_frame = ctk.CTkFrame(middle_frame, fg_color="transparent")
         logo_text_frame.pack(side="left", padx=(0, 20), anchor="n")
 
-        # Logo
         logo_widget = None
         try:
             logo_path = resource_path(os.path.join("Icons", "logo.png"))
@@ -726,10 +735,8 @@ class VoxShareGUI(ctk.CTk):
         if logo_widget:
             logo_widget.pack()
 
-        # Текст под логотипом
         ctk.CTkLabel(logo_text_frame, text="VoxShare", font=("Arial", 24)).pack(pady=(10, 0))
         
-        # Peer List (same as before)
         peer_list_frame = ctk.CTkFrame(middle_frame)
         peer_list_frame.pack(side="left", fill="both", expand=True)
         ctk.CTkLabel(peer_list_frame, text="Peers:", font=("Arial", 14)).pack(anchor="w", padx=5)
@@ -737,7 +744,6 @@ class VoxShareGUI(ctk.CTk):
         self.peer_list_textbox.pack(side="top", fill="both", expand=True, padx=5, pady=(0,5))
         self.peer_list_textbox.configure(state="disabled")
 
-        # Bottom controls (same as before)
         bottom_frame = ctk.CTkFrame(self, fg_color="transparent")
         bottom_frame.pack(side="bottom", pady=10, padx=10, fill="x")
         bottom_frame.columnconfigure(0, weight=1)
@@ -749,7 +755,6 @@ class VoxShareGUI(ctk.CTk):
         self.talk_btn = ctk.CTkButton(bottom_frame, text="Speak (Hold Space)", height=40, font=("Arial", 16))
         self.talk_btn.grid(row=2, column=0, padx=50, pady=(5, 5), sticky="ew")
 
-        # Bindings (same as before)
         self.talk_btn.bind("<ButtonPress-1>", self.on_press)
         self.talk_btn.bind("<ButtonRelease-1>", self.on_release)
         self.bind("<KeyPress-space>", self.on_press)
@@ -757,22 +762,18 @@ class VoxShareGUI(ctk.CTk):
         self.bind("<Button-1>", lambda event: self.focus_set())
         logging.debug("GUI elements created and placed.")
 
-    # --- ADDED: Methods to manage audio subsystem ---
     def setup_audio_subsystem(self):
         """Initializes AudioTransceiver and starts all related threads."""
         logging.info("Setting up audio subsystem...")
-        # Ensure indices are valid before proceeding
         if self.input_device_index == INVALID_DEVICE_INDEX or self.output_device_index == INVALID_DEVICE_INDEX:
              logging.error("Cannot setup audio subsystem: Invalid device indices.")
              return False
         try:
-            # Create transceiver instance
             self.audio_transceiver = AudioTransceiver(
                 user_config=self.user_config,
                 net_config=self.net_config,
-                audio_config=self.audio_config # Contains the selected indices now
+                audio_config=self.audio_config
             )
-            # Start threads
             logging.info("Starting worker threads...")
             self.input_thread = threading.Thread(target=self.audio_input_thread_func, name="AudioInputThread", daemon=True)
             self.output_thread = threading.Thread(target=self.audio_output_thread_func, name="AudioOutputThread", daemon=True)
@@ -786,8 +787,7 @@ class VoxShareGUI(ctk.CTk):
             self.ping_thread.start()
             self.cleanup_thread.start()
 
-            # Start the GUI update loop if not already running (or restart if needed)
-            self.after(100, self.update_gui) # Schedule first update
+            self.after(100, self.update_gui)
             logging.info("Audio subsystem and threads started successfully.")
             return True
 
@@ -811,66 +811,51 @@ class VoxShareGUI(ctk.CTk):
         else:
             logging.warning("Shutdown request but audio_transceiver not found.")
 
-        # Wait for threads to finish (with timeout)
         threads_to_join = [
             self.input_thread, self.output_thread, self.receive_thread,
             self.ping_thread, self.cleanup_thread
         ]
-        join_timeout = 2.0 # Seconds to wait for each thread
+        join_timeout = 2.0
         for t in threads_to_join:
             if t and t.is_alive():
                 logging.debug(f"Waiting for thread {t.name} to join...")
                 t.join(timeout=join_timeout)
                 if t.is_alive():
                     logging.warning(f"Thread {t.name} did not finish within timeout.")
-            # Reset thread variable
             if t == self.input_thread: self.input_thread = None
             elif t == self.output_thread: self.output_thread = None
             elif t == self.receive_thread: self.receive_thread = None
             elif t == self.ping_thread: self.ping_thread = None
             elif t == self.cleanup_thread: self.cleanup_thread = None
 
-
-        self.audio_transceiver = None # Clear reference
+        self.audio_transceiver = None
         logging.info("Audio subsystem shutdown complete.")
-    # --- END Added Methods ---
 
-    # --- ADDED: Method to open settings ---
     def open_audio_settings(self):
         """Opens the AudioSelector window to reconfigure devices."""
         logging.info("Opening audio settings selector...")
-        # Pass the current config to the selector
-        selector = AudioSelector(config, master=self) # Pass self as master
-        self.wait_window(selector) # Make it modal and wait for it to close
+        selector = AudioSelector(config, master=self)
+        self.wait_window(selector)
 
         logging.debug(f"AudioSelector closed. Selection successful: {getattr(selector, 'selection_successful', False)}")
 
-        # Check if selection was successful (AudioSelector sets this flag)
         if hasattr(selector, 'selection_successful') and selector.selection_successful:
             logging.info("Audio settings changed and saved. Restarting audio subsystem...")
-            # Reload config in case selector changed it (it should have saved it)
-            load_config() # Reload the global config
-
-            # Update self.config and indices just in case load_config didn't update the instance's dict
+            load_config()
             self.config = config
             self.audio_config = config.get('audio', {})
             new_input_idx = self.audio_config.get('input_device_index', INVALID_DEVICE_INDEX)
             new_output_idx = self.audio_config.get('output_device_index', INVALID_DEVICE_INDEX)
 
-            # Validate that new indices are sensible before restarting
             if new_input_idx == INVALID_DEVICE_INDEX or new_output_idx == INVALID_DEVICE_INDEX:
                  logging.error("Audio selector closed successfully but saved invalid indices. Aborting restart.")
                  messagebox.showerror("Settings Error", "Failed to save valid audio device settings.")
                  return
 
-            # Shutdown existing audio
             self.shutdown_audio_subsystem()
-
-            # Update indices used by this instance
             self.input_device_index = new_input_idx
             self.output_device_index = new_output_idx
 
-            # Restart audio with new settings
             if not self.setup_audio_subsystem():
                 logging.error("Failed to restart audio subsystem after settings change.")
                 messagebox.showerror("Restart Error", "Failed to restart audio with new settings. Check logs.")
@@ -878,16 +863,9 @@ class VoxShareGUI(ctk.CTk):
                 logging.info("Audio subsystem restarted successfully with new settings.")
         else:
             logging.info("Audio settings window closed without saving changes.")
-    # --- END Added Method ---
-
-    # --- Existing methods (audio_input/output_thread, receive_thread, etc.) ---
-    # These methods now rely on self.audio_transceiver and indices stored in self.
-    # They don't need fundamental changes, just ensure they use instance variables correctly.
-    # Copying them from previous version for completeness.
 
     def audio_input_thread_func(self):
         """Thread for capturing audio, encoding, and sending"""
-        # Check if transceiver exists and has necessary attributes
         if not hasattr(self, 'audio_transceiver') or not self.audio_transceiver or not hasattr(self.audio_transceiver, 'shutdown_event'):
             logging.error("AudioInputThread cannot start: audio_transceiver not ready.")
             return
@@ -896,12 +874,11 @@ class VoxShareGUI(ctk.CTk):
         channels = self.audio_transceiver.channels
         blocksize = self.audio_transceiver.block_size
         dtype = self.audio_transceiver.dtype
-        current_input_device = self.input_device_index # Use index from self
-
+        current_input_device = self.input_device_index
+        
         def callback(indata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
             """Callback function for the input stream."""
             if status: logging.warning(f"Input callback status: {status}")
-            # Check shutdown event on transceiver
             if not self.audio_transceiver.shutdown_event.is_set() and self.is_pressing:
                 try:
                     pcm_data_bytes = indata.tobytes()
@@ -913,7 +890,7 @@ class VoxShareGUI(ctk.CTk):
                         while self.volume_queue.full(): self.volume_queue.get_nowait()
                         self.volume_queue.put_nowait(calculated_volume)
                     except queue.Full: pass
-                    except queue.Empty: pass # Should not happen when getting
+                    except queue.Empty: pass
                     except Exception as q_err: logging.warning(f"Error managing volume queue: {q_err}")
                 except Exception as e: logging.exception(f"Error in audio_input callback")
             else:
@@ -945,38 +922,49 @@ class VoxShareGUI(ctk.CTk):
         channels = self.audio_transceiver.channels
         blocksize = self.audio_transceiver.block_size
         dtype = self.audio_transceiver.dtype
-        current_output_device = self.output_device_index # Use index from self
+        current_output_device = self.output_device_index
 
         def callback(outdata: np.ndarray, frames: int, time_info, status: sd.CallbackFlags):
             """Callback function for the output stream."""
-            if status: logging.warning(f"Output callback status: {status}")
-            processed_ip = None
+            if status: 
+                logging.warning(f"Output callback status: {status}")
+    
             if not self.audio_transceiver.shutdown_event.is_set():
-                packet_info = self.audio_transceiver.get_decoded_audio_packet()
-                if packet_info is not None:
+                # Получаем и добавляем все доступные пакеты в микшер
+                while True:
+                    packet_info = self.audio_transceiver.get_decoded_audio_packet()
+                    if packet_info is None:
+                        break
+            
                     sender_ip, audio_data = packet_info
                     if audio_data is not None and audio_data.size == frames * channels:
-                        outdata[:] = audio_data.reshape(-1, channels)
-                        processed_ip = sender_ip
-                        logging.debug(f"Played audio packet {len(audio_data)} samples from {sender_ip}")
-                    else:
-                        outdata.fill(0)
-                        if audio_data is not None: logging.warning(f"Packet size mismatch from {sender_ip}, played silence.")
-                else: outdata.fill(0)
-                with self.speaker_lock:
-                    if processed_ip:
-                        self.currently_speaking_ip = processed_ip
-                        self.last_packet_played_time = time.time()
-            else: outdata.fill(0)
+                        self.audio_transceiver.mixer.add_audio(sender_ip, audio_data)
+                        with self.speaker_lock:
+                            self.currently_speaking_ip = sender_ip
+                            self.last_packet_played_time = time.time()
+        
+                # Получаем смешанный аудиопоток
+                mixed_audio = self.audio_transceiver.mixer.mix_audio()
+        
+                # Воспроизводим смешанный звук или тишину
+                if len(mixed_audio) == frames * channels:
+                    outdata[:] = mixed_audio.reshape(-1, channels)
+                else:
+                    outdata.fill(0)
+            else:
+                outdata.fill(0)
 
         try:
             logging.info(f"Opening OutputStream: Device={current_output_device}, Rate={sample_rate}, Block={blocksize}, Dtype={dtype}, Channels={channels}")
             with sd.OutputStream(samplerate=sample_rate, channels=channels, dtype=dtype, callback=callback, blocksize=blocksize, device=current_output_device):
                 logging.info("OutputStream opened. Waiting for shutdown signal...")
                 self.audio_transceiver.shutdown_event.wait()
-        except sd.PortAudioError as e: logging.exception(f"Critical audio output error (PortAudioError) Device={current_output_device}")
-        except ValueError as e: logging.exception(f"Critical audio output error (ValueError - likely invalid device index?) Device={current_output_device}")
-        except Exception as e: logging.exception(f"Critical audio output error (Other) Device={current_output_device}")
+        except sd.PortAudioError as e: 
+            logging.exception(f"Critical audio output error (PortAudioError) Device={current_output_device}")
+        except ValueError as e: 
+            logging.exception(f"Critical audio output error (ValueError - likely invalid device index?) Device={current_output_device}")
+        except Exception as e: 
+            logging.exception(f"Critical audio output error (Other) Device={current_output_device}")
         logging.info("Audio output thread finished.")
 
     def receive_thread_func(self):
@@ -988,9 +976,8 @@ class VoxShareGUI(ctk.CTk):
     def ping_thread_func(self):
         """Periodically sends ping packets"""
         logging.info("Ping sending thread starting.")
-        # Wait until transceiver is ready
         while not hasattr(self, 'audio_transceiver') or not self.audio_transceiver:
-             if self.is_closing: return # Exit if app is closing
+             if self.is_closing: return
              time.sleep(0.5)
              logging.debug("PingThread waiting for audio_transceiver...")
 
@@ -998,20 +985,18 @@ class VoxShareGUI(ctk.CTk):
         if ping_interval <= 0: logging.warning("Pinging disabled."); return
 
         while not self.audio_transceiver.shutdown_event.wait(timeout=ping_interval):
-            # Check again in case transceiver was reset
             if hasattr(self, 'audio_transceiver') and self.audio_transceiver:
                  self.audio_transceiver.send_ping()
             else:
                  logging.warning("PingThread: audio_transceiver disappeared mid-run.")
-                 break # Exit loop if transceiver is gone
+                 break
         logging.info("Ping sending thread finished.")
 
     def client_cleanup_thread_func(self):
         """Periodically cleans up inactive clients"""
         logging.info("Client cleanup thread starting.")
-        # Wait until transceiver is ready
         while not hasattr(self, 'audio_transceiver') or not self.audio_transceiver:
-             if self.is_closing: return # Exit if app is closing
+             if self.is_closing: return
              time.sleep(0.5)
              logging.debug("ClientCleanupThread waiting for audio_transceiver...")
 
@@ -1020,23 +1005,20 @@ class VoxShareGUI(ctk.CTk):
 
         while not self.audio_transceiver.shutdown_event.wait(timeout=cleanup_interval):
             try:
-                # Check again in case transceiver was reset
                 if hasattr(self, 'audio_transceiver') and self.audio_transceiver:
                      self.audio_transceiver.cleanup_inactive_clients()
                 else:
                      logging.warning("ClientCleanupThread: audio_transceiver disappeared mid-run.")
-                     break # Exit loop if transceiver is gone
+                     break
             except Exception as e: logging.exception("Error during client cleanup")
         logging.info("Client cleanup thread finished.")
 
     def update_gui(self):
-        """GUI update loop (unchanged logic from previous version)"""
+        """GUI update loop"""
         try:
-            if not self.winfo_exists(): return # Exit if window closed
-            # Check if transceiver is still valid (it might be restarting)
+            if not self.winfo_exists(): return
             transceiver_ready = hasattr(self, 'audio_transceiver') and self.audio_transceiver and not self.audio_transceiver.shutdown_event.is_set()
 
-            # --- Update volume bar from queue ---
             last_volume_update = None
             while not self.volume_queue.empty():
                 try: last_volume_update = self.volume_queue.get_nowait()
@@ -1046,7 +1028,6 @@ class VoxShareGUI(ctk.CTk):
                 display_volume = min(1.0, max(0.0, last_volume_update))
                 self.volume_bar.set(display_volume)
 
-            # --- Update peer list (only if transceiver is ready) ---
             if transceiver_ready:
                 active_peers_data = {}
                 current_speaker_ip = None
@@ -1078,26 +1059,23 @@ class VoxShareGUI(ctk.CTk):
                     except tkinter.TclError as e: logging.warning(f"Error updating peer list: {e}")
                     except Exception as e: logging.exception("Unexpected error updating peer list")
             else:
-                # What to show if transceiver isn't ready? Clear list or show status?
                  if hasattr(self, 'peer_list_textbox') and self.peer_list_textbox.winfo_exists():
                     try:
                          self.peer_list_textbox.configure(state="normal")
                          self.peer_list_textbox.delete("1.0", "end")
                          self.peer_list_textbox.insert("end", "(Audio system inactive)")
                          self.peer_list_textbox.configure(state="disabled")
-                    except: pass # Ignore errors if widget destroyed
+                    except: pass
 
-            # Schedule next update - check window existence again
             if self.winfo_exists():
                 self.after(100, self.update_gui)
         except Exception as e:
-             # Catch errors in the update loop itself
              logging.exception("Unexpected error in update_gui")
-             if self.winfo_exists(): # Reschedule even after error?
-                 self.after(500, self.update_gui) # Slower reschedule after error
+             if self.winfo_exists():
+                 self.after(500, self.update_gui)
 
     def on_press(self, event=None):
-        """Handler for Speak button press or Spacebar press (unchanged)"""
+        """Handler for Speak button press or Spacebar press"""
         if not self.is_pressing:
             logging.info("Transmission started (button/space pressed)")
             self.is_pressing = True
@@ -1106,7 +1084,7 @@ class VoxShareGUI(ctk.CTk):
                  self.talk_btn.configure(fg_color="#00A853")
 
     def on_release(self, event=None):
-        """Handler for Speak button release or Spacebar release (unchanged)"""
+        """Handler for Speak button release or Spacebar release"""
         if self.is_pressing:
             logging.info("Transmission stopped (button/space released)")
             self.is_pressing = False
@@ -1119,7 +1097,7 @@ class VoxShareGUI(ctk.CTk):
                 self.volume_bar.set(0.0)
 
     def update_led(self, on):
-        """Updates the color of the LED indicator (unchanged)"""
+        """Updates the color of the LED indicator"""
         color = "#00C853" if on else "#D50000"
         if hasattr(self, 'led') and self.led.winfo_exists():
             try: self.led.configure(fg_color=color)
@@ -1128,17 +1106,15 @@ class VoxShareGUI(ctk.CTk):
     def on_closing(self):
         """Handler for window closing event (WM_DELETE_WINDOW)."""
         logging.info("Received window closing signal (WM_DELETE_WINDOW).")
-        self.is_closing = True # Flag for threads waiting for transceiver
-        self.shutdown_audio_subsystem() # Use the new shutdown method
+        self.is_closing = True
+        self.shutdown_audio_subsystem()
         logging.info("Destroying GUI window...")
         try: self.destroy()
         except Exception as e: logging.exception("Error during main window destruction")
         logging.info("Application shutdown process completed.")
 
-
-# --- MODIFIED: Entry point / Startup Logic ---
+# --- Entry point / Startup Logic ---
 if __name__ == "__main__":
-    # Initialize closing flag for threads checking it during startup waits
     VoxShareGUI.is_closing = False
 
     # 1. Load Configuration
@@ -1185,7 +1161,7 @@ if __name__ == "__main__":
     if input_idx != INVALID_DEVICE_INDEX and output_idx != INVALID_DEVICE_INDEX:
         logging.info(f"Found saved device indices: Input={input_idx}, Output={output_idx}. Validating...")
         try:
-            rate = audio_config.get('sample_rate', 48000)
+            rate = audio_config.get('sample_rate', 16000)
             chans = audio_config.get('channels', 1)
             dtype = audio_config.get('dtype', 'int16')
             sd.check_input_settings(device=input_idx, channels=chans, samplerate=rate, dtype=dtype)
@@ -1195,11 +1171,10 @@ if __name__ == "__main__":
         except (sd.PortAudioError, ValueError, TypeError) as e:
             logging.warning(f"Validation failed for saved devices (In={input_idx}, Out={output_idx}): {e}")
             logging.info("Resetting saved device configuration.")
-            # Reset invalid config and save
             config['audio']['input_device_index'] = INVALID_DEVICE_INDEX
             config['audio']['output_device_index'] = INVALID_DEVICE_INDEX
             save_config(config)
-            valid_devices_configured = False # Ensure we run selector
+            valid_devices_configured = False
         except Exception as e:
              logging.exception("Unexpected error validating saved devices. Resetting config.")
              config['audio']['input_device_index'] = INVALID_DEVICE_INDEX
@@ -1211,26 +1186,22 @@ if __name__ == "__main__":
     if not valid_devices_configured:
         logging.info("Valid audio devices not configured. Launching AudioSelector...")
         try:
-            # Create a temporary root window to host the selector if needed
             temp_root = ctk.CTk()
-            temp_root.withdraw() # Hide the temporary root
+            temp_root.withdraw()
 
             selector = AudioSelector(config, master=temp_root)
-            # selector.mainloop() # This doesn't work well for modal Toplevel
-            temp_root.wait_window(selector) # Wait for selector to close
+            temp_root.wait_window(selector)
 
-            temp_root.destroy() # Clean up temporary root
+            temp_root.destroy()
 
             if hasattr(selector, 'selection_successful') and selector.selection_successful:
                  logging.info("AudioSelector finished successfully.")
-                 # Reload config as selector should have saved it
                  load_config()
-                 # Mark as configured now
                  valid_devices_configured = True
             else:
                  logging.error("Audio device selection was cancelled or failed.")
                  messagebox.showerror("Configuration Needed", "Audio devices were not configured. Application cannot start.")
-                 sys.exit(1) # Exit if selection failed
+                 sys.exit(1)
         except Exception as e:
             logging.exception("Error running AudioSelector during startup.")
             messagebox.showerror("Startup Error", f"Failed to configure audio devices: {e}")
@@ -1240,14 +1211,13 @@ if __name__ == "__main__":
     if valid_devices_configured:
         logging.info("Launching main application window...")
         try:
-            app = VoxShareGUI(config) # Pass the validated config
+            app = VoxShareGUI(config)
             app.mainloop()
         except Exception as e:
             logging.exception("Critical unhandled error in main application")
             messagebox.showerror("Fatal Error", f"An unexpected error occurred: {e}")
             sys.exit(1)
     else:
-        # This part should ideally not be reached if logic above is correct
         logging.critical("Reached end of startup without valid devices configured.")
         sys.exit(1)
 
