@@ -8,7 +8,7 @@
 
 Check out the [changelog.md](changelog.md) for a detailed list of features, bug fixes, and improvements by version.
 
-Latest version: **v0.12**  
+Latest version: **v0.15**  
 
 ## 🎧 Features
 
