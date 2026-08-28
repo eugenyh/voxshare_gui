@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v0.15] - 2025-04-21
+## [v0.15] - 2026-08-28
 
 ### Fixed
 - **bind opus.dll file to standalone application**
