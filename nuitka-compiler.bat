@@ -21,8 +21,7 @@ if not exist "%PYTHON_SCRIPT%" (
 
 :: Compilation with Nuitka
 echo Compile %PYTHON_SCRIPT% with Nuitka...
-python -m nuitka --onefile --standalone --windows-console-mode=disable --windows-icon-from-ico=Icons/logo.ico --include-data-files=Icons/logo.png=Icons/logo.png --output-dir=nuitka-dist --lto=yes --msvc=latest --enable-plugin=tk-inter,upx --nofollow-import-to=PIL.ImageQt "%PYTHON_SCRIPT%"
-
+python -m nuitka --onefile --standalone --windows-console-mode=disable --windows-icon-from-ico=Icons/logo.ico --include-data-files=Icons/logo.png=Icons/logo.png --include-data-files=Icons/settings_icon.png=Icons/settings_icon.png --include-data-files=opus.dll=opus.dll --output-dir=nuitka-dist --lto=yes --msvc=latest --enable-plugin=tk-inter --nofollow-import-to=PIL.ImageQt "%PYTHON_SCRIPT%"
 :: Checking for result
 if errorlevel 1 (
     echo Compile error! Check settings.
